@@ -4,6 +4,7 @@ add_definitions(
 	-DTW_NO_DIRECT3D
 	-DGLEW_STATIC
 	-D_CRT_SECURE_NO_WARNINGS
+	-DGLEW_NO_GLU
 )
 
 ### GLFW ###
@@ -18,7 +19,7 @@ include_directories(
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 set(OPENGL_LIBRARY
 	${OPENGL_LIBRARY}
-	-lGL -lGLU -lXrandr -lXext -lX11 -lrt
+	-lGL -lXrandr -lXext -lX11 -lrt
 	${CMAKE_DL_LIBS}
 	${GLFW_LIBRARIES}
 )
