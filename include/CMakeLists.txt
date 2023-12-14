@@ -1,19 +1,7 @@
-add_definitions(
-	-DTW_STATIC
-	-DTW_NO_LIB_PRAGMA
-	-DTW_NO_DIRECT3D
-	-DGLEW_STATIC
-	-D_CRT_SECURE_NO_WARNINGS
-	-DGLEW_NO_GLU
-)
-
-### GLFW ###
-
 add_subdirectory(glfw)
 
 include_directories(
     glfw/include/GLFW
-    glew/include
 )
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
@@ -30,22 +18,3 @@ set(OPENGL_LIBRARY
 	${GLFW_LIBRARIES}
 )
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-
-
-### GLEW ###
-
-set(GLEW_SOURCE
-	glew/src/glew.c
-)
-
-set(GLEW_HEADERS)
-
-add_library(GLEW STATIC
-	${GLEW_SOURCE}
-	${GLEW_INCLUDE}
-)
-
-target_link_libraries(GLEW
-	${OPENGL_LIBRARY}
-	${EXTRA_LIBS}
-)
