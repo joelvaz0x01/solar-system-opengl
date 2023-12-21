@@ -30,9 +30,13 @@
 
 #include "main.h"
 
-
 #define WIDTH 1920 /// width of the screen
 #define HEIGHT 1080 /// height of the screen
+
+// define mvp
+glm::mat4 model = glm::mat4(1.0f); /// model matrix
+glm::mat4 view = glm::mat4(1.0f); /// view matrix
+glm::mat4 projection = glm::mat4(1.0f); /// projection matrix
 
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f)); /// camera position
 double lastX = WIDTH / 2.0f; /// last x position of the mouse
@@ -78,26 +82,29 @@ int main() {
     glEnable(GL_DEPTH_TEST);
 
     // compile shaders
-    Shader shader("shaders/vertexShader.glsl", "shaders/fragmentShader.glsl");
-
-    shader.use();
-    shader.setInt("albedoMap", 0);
-    shader.setInt("normalMap", 1);
-    shader.setInt("metallicMap", 2);
-    shader.setInt("roughnessMap", 3);
-    shader.setInt("aoMap", 4);
+    Shader planet("shaders/planetVertex.glsl", "shaders/planetFragment.glsl");
+    Shader sun("shaders/sunVertex.glsl", "shaders/sunFragment.glsl");
 
     // load planet textures
     unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
 
-    // light properties
-    glm::vec3 lightPositions[] = {glm::vec3(0.0f, 0.0f, 0.0f),};
-    glm::vec3 lightColors[] = {glm::vec3(10.0f, 10.0f, 10.0f),};
+    // light configuration
+    sun.use();
+    sun.setInt("texture1", 0);
 
-    // projection matrix
-    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float) WIDTH / (float) HEIGHT, 0.1f, 100.0f);
-    shader.use();
-    shader.setMat4("projection", projection);
+    // planet shader configuration
+    planet.use();
+    planet.setInt("material.diffuse", 0);
+    planet.setInt("material.specular", 1);
+
+    // phong lighting declaration
+    glm::vec3 lightColor;
+    glm::vec3 diffuseColor;
+    glm::vec3 ambientColor;
+
+    // light properties (sun)
+    glm::vec3 sunPosition = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 sunLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
     while (!glfwWindowShouldClose(window)) {
         double currentFrame = glfwGetTime();
@@ -109,30 +116,34 @@ int main() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader.use();
-        glm::mat4 view = camera.GetViewMatrix();
-        shader.setMat4("view", view);
-        shader.setVec3("camPos", camera.Position);
+        projection = glm::perspective(glm::radians(camera.Zoom), (float) WIDTH / (float) HEIGHT, 0.1f, 100.0f);
+        view = camera.GetViewMatrix();
+        model = glm::mat4(1.0f);
 
-        // bind textures
+        // light properties (phong shading)
+        lightColor = sunLightColor;
+        diffuseColor = lightColor * glm::vec3(0.8f);
+        ambientColor = diffuseColor * glm::vec3(0.1f);
+
+        // light properties (sun)
+        sun.use();
+        sun.setVec3("color", lightColor);
+        sun.setMat4("projection", projection);
+        sun.setMat4("view", view);
+        model = glm::translate(glm::mat4(1.0f), sunPosition);
+        sun.setMat4("model", model);
         bindTexture(sunTexture, 0);
+        renderSphere();
 
-        glm::mat4 model = glm::mat4(1.0f);
-
-        // render the light source (sun)
-        unsigned int lightPositionSize = sizeof(lightPositions) / sizeof(lightPositions[0]);
-        for (unsigned int i = 0; i < lightPositionSize; ++i) {
-            glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
-            newPos = lightPositions[i];
-            shader.setVec3("lightPositions[" + std::to_string(i) + "]", newPos);
-            shader.setVec3("lightColors[" + std::to_string(i) + "]", lightColors[i]);
-
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, newPos);
-            shader.setMat4("model", model);
-            shader.setMat3("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
-            renderSphere();
-        }
+        // planet properties
+        planet.use();
+        planet.setVec3("light.position", camera.Position);
+        planet.setMat4("projection", projection);
+        planet.setMat4("view", view);
+        planet.setVec3("light.ambient", ambientColor);
+        planet.setVec3("light.diffuse", diffuseColor);
+        planet.setVec3("light.specular", lightColor);
+        planet.setFloat("material.shininess", 0.4f);
 
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
