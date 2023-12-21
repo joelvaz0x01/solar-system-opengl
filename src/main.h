@@ -18,3 +18,7 @@ void scroll_callback(GLFWwindow *window, double x_offset, double y_offset);
 void processInput(GLFWwindow *window);
 
 unsigned int loadTexture(const char *path);
+
+void renderSphere();
+
+void bindTexture(unsigned int texture, unsigned int textureUnit);

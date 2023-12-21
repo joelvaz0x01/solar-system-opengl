@@ -1,1 +1,1 @@
-# computer-graphics-project
+# Solar system made with OpenGL
