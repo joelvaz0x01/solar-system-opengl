@@ -21,7 +21,7 @@ unsigned int loadTexture(const char *path);
 
 void renderSphere();
 
-void bindTexture(unsigned int texture, unsigned int textureUnit);
+void bindTexture(unsigned int texture);
 
 glm::mat4 planetCreator(float translation, float distance, float rotation, float scale, glm::vec3 centerModel);
 

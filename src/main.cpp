@@ -112,7 +112,7 @@ int main() {
             loadTexture("resources/textures/neptune.jpg")
     };
 
-    // load moon texture
+    // load earth's moon texture
     unsigned int moonTexture = loadTexture("resources/textures/moon.jpg");
 
     // load saturn's ring texture
@@ -141,6 +141,7 @@ int main() {
     // light properties (sun)
     glm::vec3 sunPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 sunLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+    glm::mat4 sunModel = glm::mat4(1.0f);
 
     while (!glfwWindowShouldClose(window)) {
         double currentFrame = glfwGetTime();
@@ -165,10 +166,10 @@ int main() {
         sun.setVec3("color", lightColor);
         sun.setMat4("projection", projection);
         sun.setMat4("view", view);
-        glm::mat4 sunModel = glm::translate(glm::mat4(1.0f), sunPosition);
+        sunModel = glm::translate(glm::mat4(1.0f), sunPosition);
         sunModel = glm::rotate(sunModel, (float) glfwGetTime() * 0.1f, glm::vec3(0.0f, 1.0f, 0.0f));
         sun.setMat4("model", sunModel);
-        bindTexture(sunTexture, 0);
+        bindTexture(sunTexture);
         renderSphere();
 
         // planet properties
@@ -179,30 +180,29 @@ int main() {
         planet.setVec3("light.ambient", ambientColor);
         planet.setVec3("light.diffuse", diffuseColor);
         planet.setVec3("light.specular", lightColor);
-        planet.setFloat("material.shininess", 0.4f);
 
         // render planets
         for (unsigned int i = 0; i < planetCount; i++) {
             planetModel[i] = planetCreator(
-                    planetProp[i].translation, // translation around the sun
+                    planetProp[i].translation, // translation around the sun (translation velocity)
                     planetProp[i].distance, // distance from the sun
-                    planetProp[i].rotation, // rotation around its own axis
+                    planetProp[i].rotation, // rotation around its own axis (rotation velocity)
                     planetProp[i].scale, // scale of the planet
-                    sunModel[3] // center of the model (contains [x, y, z])
+                    sunModel[3] // center of the model (contains the exact position of the sun)
             );
             planet.setMat4("model", planetModel[i]);
-            bindTexture(planetTextures[i], 0);
+            bindTexture(planetTextures[i]);
             renderSphere();
             if (planetProp[i].name == "earth") { // render moon
                 glm::mat4 moonModel = planetCreator(
-                        5.0f, // translation around the earth
+                        5.0f, // translation around the earth (translation velocity)
                         0.3f, // distance from the earth
-                        2.0f, // rotation around its own axis
+                        2.0f, // rotation around its own axis (rotation velocity)
                         0.05f, // scale of the planet
-                        planetModel[i][3] // center of the model (contains [x, y, z])
+                        planetModel[i][3] // center of the model (contains the exact position of the earth)
                 );
                 planet.setMat4("model", moonModel);
-                bindTexture(moonTexture, 0);
+                bindTexture(moonTexture);
                 renderSphere();
             }
         }
@@ -212,7 +212,11 @@ int main() {
         glfwPollEvents();
     }
 
-    glfwTerminate();
+    // de-allocate all resources
+    glDeleteBuffers(1, &sphereVAO);
+    delete[] planetModel;
+
+    glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
 }
 
@@ -291,9 +295,9 @@ void renderSphere() {
         glGenBuffers(1, &vbo);
         glGenBuffers(1, &ebo);
 
-        std::vector<glm::vec3> positions;
-        std::vector<glm::vec2> uv;
-        std::vector<glm::vec3> normals;
+        std::vector<glm::vec3> positions; // vertices
+        std::vector<glm::vec2> uv; // texture coordinates
+        std::vector<glm::vec3> normals; // normals
         std::vector<unsigned int> indices;
 
         const unsigned int STEP = 64; // increase to improve shape quality
@@ -359,6 +363,7 @@ void renderSphere() {
                 data.push_back(uv[i].y);
             }
         }
+
         glBindVertexArray(sphereVAO);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
@@ -451,8 +456,8 @@ unsigned int loadTexture(char const *path) {
  * @param textureUnit: texture unit to bind
  * @return nullptr
  */
-void bindTexture(unsigned int texture, unsigned int textureUnit) {
-    glActiveTexture(GL_TEXTURE + textureUnit);
+void bindTexture(unsigned int texture) {
+    glActiveTexture(GL_TEXTURE);
     glBindTexture(GL_TEXTURE_2D, texture);
 }
 

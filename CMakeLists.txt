@@ -38,34 +38,24 @@ file(GLOB SRC_SOLAR_SYSTEM
 add_executable(${SOLAR_SYSTEM} ${SRC_SOLAR_SYSTEM})
 target_link_libraries(${SOLAR_SYSTEM} ${ALL_LIBS})
 
-# create directory for shaders on ${CMAKE_SOURCE_DIR}/bin
-if(WIN32)
-	add_custom_command(TARGET ${SOLAR_SYSTEM} PRE_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${SOLAR_SYSTEM}>/shaders)
-elseif(UNIX AND NOT APPLE)
-	file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/shaders)
-elseif(APPLE)
-	file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/shaders)
-endif(WIN32)
-
 # copy shaders to ${CMAKE_SOURCE_DIR}/bin/shaders directory
-foreach(SHADER ${SHADERS})
-	if(WIN32)
-		add_custom_command(
-				TARGET ${SOLAR_SYSTEM} PRE_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy ${SHADER} $<TARGET_FILE_DIR:${SOLAR_SYSTEM}>/shaders
-		)
-	elseif(UNIX AND NOT APPLE)
-		file(COPY ${SHADER} DESTINATION ${CMAKE_SOURCE_DIR}/bin/)
-	elseif(APPLE)
-		get_filename_component(SHADER_NAME ${SHADER} NAME)
-		makeLink(${SHADER} ${CMAKE_SOURCE_DIR}/bin/${SHADER_NAME} ${SOLAR_SYSTEM})
-	endif(WIN32)
-endforeach(SHADER)
-
-# copy resources to ${CMAKE_SOURCE_DIR}/bin/resources directory
+# POST_BUILD is to override shaders directory
 if(WIN32)
 	add_custom_command(
-			TARGET ${SOLAR_SYSTEM} PRE_BUILD
+			TARGET ${SOLAR_SYSTEM} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/shaders $<TARGET_FILE_DIR:${SOLAR_SYSTEM}>/shaders
+	)
+elseif(UNIX AND NOT APPLE)
+	file(COPY ${CMAKE_SOURCE_DIR}/src/shaders DESTINATION ${CMAKE_SOURCE_DIR}/bin/)
+elseif(APPLE)
+	makeLink(${CMAKE_SOURCE_DIR}/src/shaders ${CMAKE_SOURCE_DIR}/bin/shaders ${SOLAR_SYSTEM})
+endif(WIN32)
+
+# copy resources to ${CMAKE_SOURCE_DIR}/bin/resources directory
+# POST_BUILD is to override resources directory
+if(WIN32)
+	add_custom_command(
+			TARGET ${SOLAR_SYSTEM} POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources $<TARGET_FILE_DIR:${SOLAR_SYSTEM}>/resources
 	)
 elseif(UNIX AND NOT APPLE)
