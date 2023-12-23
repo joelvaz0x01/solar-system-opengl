@@ -22,3 +22,13 @@ unsigned int loadTexture(const char *path);
 void renderSphere();
 
 void bindTexture(unsigned int texture, unsigned int textureUnit);
+
+glm::mat4 planetCreator(float translation, float distance, float rotation, float scale, glm::vec3 centerModel);
+
+struct planetProperties {
+    std::string name; // name of the planet
+    float translation; // translation around the sun
+    float distance; // distance from the sun
+    float rotation; // rotation around its own axis
+    float scale; // scale of the planet
+};

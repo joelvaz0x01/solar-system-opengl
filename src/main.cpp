@@ -33,8 +33,18 @@
 #define WIDTH 1920 /// width of the screen
 #define HEIGHT 1080 /// height of the screen
 
-// define mvp
-glm::mat4 model = glm::mat4(1.0f); /// model matrix
+// planet properties
+planetProperties planetProp[] = {
+        {"mercury", 2.0f, 2.0f, 2.0f, 0.1f}, // mercury
+        {"venus",   1.5f, 3.0f, 2.0f, 0.1f}, // venus
+        {"earth",   1.0f, 4.0f, 2.0f, 0.1f}, // earth
+        {"mars",    0.8f, 5.0f, 2.0f, 0.1f}, // mars
+        {"jupiter", 0.6f, 6.0f, 2.0f, 0.3f}, // jupiter
+        {"saturn",  0.3f, 7.0f, 2.0f, 0.3f}, // saturn
+        {"uranus",  0.2f, 8.0f, 2.0f, 0.3f}, // uranus
+        {"neptune", 0.1f, 9.0f, 2.0f, 0.3f}  // neptune
+};
+
 glm::mat4 view = glm::mat4(1.0f); /// view matrix
 glm::mat4 projection = glm::mat4(1.0f); /// projection matrix
 
@@ -58,7 +68,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Cube Texture", /*glfwGetPrimaryMonitor()*/ nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Cube Texture", glfwGetPrimaryMonitor() /*nullptr*/, nullptr);
     if (window == nullptr) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -87,6 +97,30 @@ int main() {
 
     // load planet textures
     unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
+
+    // load planet textures
+    unsigned int planetTextures[] = {
+            loadTexture("resources/textures/mercury.jpg"),
+            loadTexture("resources/textures/venus.jpg"),
+            loadTexture("resources/textures/earth.jpg"),
+            loadTexture("resources/textures/mars.jpg"),
+            loadTexture("resources/textures/jupiter.jpg"),
+            loadTexture("resources/textures/saturn.jpg"),
+            loadTexture("resources/textures/uranus.jpg"),
+            loadTexture("resources/textures/neptune.jpg")
+    };
+
+    // load moon texture
+    unsigned int moonTexture = loadTexture("resources/textures/moon.jpg");
+
+    // load saturn's ring texture
+    unsigned int saturnRingTexture = loadTexture("resources/textures/saturn_ring.png");
+
+    // number of planets
+    unsigned int planetCount = sizeof(planetTextures) / sizeof(planetTextures[0]);
+
+    // model matrix for each planet
+    auto *planetModel = new glm::mat4[planetCount];
 
     // light configuration
     sun.use();
@@ -118,7 +152,6 @@ int main() {
 
         projection = glm::perspective(glm::radians(camera.Zoom), (float) WIDTH / (float) HEIGHT, 0.1f, 100.0f);
         view = camera.GetViewMatrix();
-        model = glm::mat4(1.0f);
 
         // light properties (phong shading)
         lightColor = sunLightColor;
@@ -130,20 +163,47 @@ int main() {
         sun.setVec3("color", lightColor);
         sun.setMat4("projection", projection);
         sun.setMat4("view", view);
-        model = glm::translate(glm::mat4(1.0f), sunPosition);
-        sun.setMat4("model", model);
+        glm::mat4 sunModel = glm::translate(glm::mat4(1.0f), sunPosition);
+        sunModel = glm::rotate(sunModel, (float) glfwGetTime() * 0.1f, glm::vec3(0.0f, 1.0f, 0.0f));
+        sun.setMat4("model", sunModel);
         bindTexture(sunTexture, 0);
         renderSphere();
 
         // planet properties
         planet.use();
-        planet.setVec3("light.position", camera.Position);
+        planet.setVec3("light.position", sunPosition);
         planet.setMat4("projection", projection);
         planet.setMat4("view", view);
         planet.setVec3("light.ambient", ambientColor);
         planet.setVec3("light.diffuse", diffuseColor);
         planet.setVec3("light.specular", lightColor);
         planet.setFloat("material.shininess", 0.4f);
+
+        // render planets
+        for (unsigned int i = 0; i < planetCount; i++) {
+            planetModel[i] = planetCreator(
+                    planetProp[i].translation, // translation around the sun
+                    planetProp[i].distance, // distance from the sun
+                    planetProp[i].rotation, // rotation around its own axis
+                    planetProp[i].scale, // scale of the planet
+                    sunModel[3] // center of the model (contains [x, y, z])
+            );
+            planet.setMat4("model", planetModel[i]);
+            bindTexture(planetTextures[i], 0);
+            renderSphere();
+            if (planetProp[i].name == "earth") { // render moon
+                glm::mat4 moonModel = planetCreator(
+                        5.0f, // translation around the earth
+                        0.3f, // distance from the earth
+                        2.0f, // rotation around its own axis
+                        0.05f, // scale of the planet
+                        planetModel[i][3] // center of the model (contains [x, y, z])
+                );
+                planet.setMat4("model", moonModel);
+                bindTexture(moonTexture, 0);
+                renderSphere();
+            }
+        }
 
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
@@ -215,7 +275,7 @@ void scroll_callback(GLFWwindow *window, double x_offset, double y_offset) {
  * @return nullptr
  */
 void renderSphere() {
-    if (sphereVAO == 0) { // first time initializing sphere
+    if (sphereVAO == 0) { // first time initializing the sphere
         glGenVertexArrays(1, &sphereVAO);
 
         // vertex buffer object, element buffer object
@@ -377,7 +437,31 @@ unsigned int loadTexture(char const *path) {
     return textureID;
 }
 
+/** Function to bind texture
+ *
+ * @param texture: texture to bind
+ * @param textureUnit: texture unit to bind
+ * @return nullptr
+ */
 void bindTexture(unsigned int texture, unsigned int textureUnit) {
     glActiveTexture(GL_TEXTURE + textureUnit);
     glBindTexture(GL_TEXTURE_2D, texture);
+}
+
+/** Function to create planet
+ *
+ * @param translation: translation around the sun/planet
+ * @param distance: distance from the sun/planet
+ * @param rotation: rotation around its own axis
+ * @param scale: scale of the planet
+ * @param centerModel: center of the model
+ * @return model matrix
+ */
+glm::mat4 planetCreator(float translation, float distance, float rotation, float scale, glm::vec3 centerModel) {
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), centerModel); // move origin of rotation to the center of model
+    model = glm::rotate(model, (float) glfwGetTime() * translation, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::translate(model, glm::vec3(0.0f, 0.0f, distance));
+    model = glm::rotate(model, (float) glfwGetTime() * rotation, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(scale));
+    return model; // center * translation * distance * rotation * scale
 }
