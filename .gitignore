@@ -35,3 +35,7 @@
 cmake-*/
 build/
 bin/
+
+# Ignore IDEs generated files
+.idea/
+.vscode/
