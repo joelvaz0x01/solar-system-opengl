@@ -22,7 +22,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION /// to avoid linker errors
+#define STB_IMAGE_IMPLEMENTATION ///< to avoid linker errors
 
 #include <stb_image.h>
 #include <shader_m.h>
@@ -30,10 +30,10 @@
 
 #include "main.h"
 
-#define WIDTH 1920 /// width of the screen
-#define HEIGHT 1080 /// height of the screen
+#define WIDTH 1920 ///< width of the screen
+#define HEIGHT 1080 ///< height of the screen
 
-// planet properties
+/// planet properties
 planetProperties planetProp[] = {
         {"mercury", 2.0f, 2.0f, 2.0f, 0.1f}, // mercury
         {"venus",   1.5f, 3.0f, 2.0f, 0.1f}, // venus
@@ -45,21 +45,26 @@ planetProperties planetProp[] = {
         {"neptune", 0.1f, 9.0f, 2.0f, 0.3f}  // neptune
 };
 
-glm::mat4 view = glm::mat4(1.0f); /// view matrix
-glm::mat4 projection = glm::mat4(1.0f); /// projection matrix
+glm::mat4 view = glm::mat4(1.0f); ///< view matrix
+glm::mat4 projection = glm::mat4(1.0f); ///< projection matrix
 
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f)); /// camera position
-double lastX = WIDTH / 2.0f; /// last x position of the mouse
-double lastY = HEIGHT / 2.0f; /// last y position of the mouse
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f)); ///< camera position
+double lastX = WIDTH / 2.0f; ///< last x position of the mouse
+double lastY = HEIGHT / 2.0f; ///< last y position of the mouse
 
-double deltaTime = 0.0f; /// time between current frame and last frame
-double lastFrame = 0.0f; /// time of last frame
+double deltaTime = 0.0f; ///< time between current frame and last frame
+double lastFrame = 0.0f; ///< time of last frame
 
-bool firstMouse = true; /// check if it's the first time moving the mouse
+bool firstMouse = true; ///< check if it's the first time moving the mouse
 
-unsigned int sphereVAO = 0; /// vertex array object for sphere
-GLsizei indexCount; /// number of indices for sphere
+unsigned int sphereVAO = 0; ///< vertex array object for sphere
+GLsizei indexCount; ///< number of indices for sphere
 
+/** Main function that is responsible for the execution of the solar system
+ *
+ * @return 0 if successful, -1 otherwise
+ *
+ */
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -223,7 +228,7 @@ int main() {
 /** Function to process input
  *
  * @param window: window to process input
- * @return nullptr
+ *
  */
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
@@ -241,7 +246,7 @@ void processInput(GLFWwindow *window) {
  * @param window: window to resize
  * @param width: new width
  * @param height: new height
- * @return nullptr
+ *
  */
 void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
     glViewport(0, 0, width, height);
@@ -252,7 +257,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
  * @param window: window to process mouse movement
  * @param x_pos: x position of mouse
  * @param y_pos: y position of mouse
- * @return nullptr
+ *
  */
 void mouse_callback(GLFWwindow *window, double x_pos, double y_pos) {
     if (firstMouse) {
@@ -276,16 +281,13 @@ void mouse_callback(GLFWwindow *window, double x_pos, double y_pos) {
  * @param window: window to process mouse scroll
  * @param x_offset: x offset of mouse scroll
  * @param y_offset: y offset of mouse scroll
- * @return nullptr
+ *
  */
 void scroll_callback(GLFWwindow *window, double x_offset, double y_offset) {
     camera.ProcessMouseScroll(static_cast<float>(y_offset));
 }
 
-/** Function to render sphere
- *
- * @return nullptr
- */
+/** Function to render sphere */
 void renderSphere() {
     if (sphereVAO == 0) { // first time initializing the sphere
         glGenVertexArrays(1, &sphereVAO);
@@ -416,6 +418,7 @@ void renderSphere() {
  *
  * @param path: path to texture
  * @return textureID
+ *
  */
 unsigned int loadTexture(char const *path) {
     unsigned int textureID;
@@ -453,8 +456,7 @@ unsigned int loadTexture(char const *path) {
 /** Function to bind texture
  *
  * @param texture: texture to bind
- * @param textureUnit: texture unit to bind
- * @return nullptr
+ *
  */
 void bindTexture(unsigned int texture) {
     glActiveTexture(GL_TEXTURE);
@@ -469,6 +471,7 @@ void bindTexture(unsigned int texture) {
  * @param scale: scale of the planet
  * @param centerModel: center of the model
  * @return model matrix
+ *
  */
 glm::mat4 planetCreator(float translation, float distance, float rotation, float scale, glm::vec3 centerModel) {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), centerModel); // move origin of rotation to the center of model
