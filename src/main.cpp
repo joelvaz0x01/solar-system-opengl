@@ -55,6 +55,8 @@ double lastY = HEIGHT / 2.0f; /// last y position of the mouse
 double deltaTime = 0.0f; /// time between current frame and last frame
 double lastFrame = 0.0f; /// time of last frame
 
+bool firstMouse = true; /// check if it's the first time moving the mouse
+
 unsigned int sphereVAO = 0; /// vertex array object for sphere
 GLsizei indexCount; /// number of indices for sphere
 
@@ -249,6 +251,12 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
  * @return nullptr
  */
 void mouse_callback(GLFWwindow *window, double x_pos, double y_pos) {
+    if (firstMouse) {
+        lastX = x_pos;
+        lastY = y_pos;
+        firstMouse = false;
+    }
+
     double x_offset = x_pos - lastX;
     double y_offset = lastY - y_pos; // reversed since y-coordinates go from bottom to top
 
