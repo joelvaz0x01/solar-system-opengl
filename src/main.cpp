@@ -30,6 +30,9 @@
 
 #include "main.h"
 
+#define PI 3.14159265359f ///< pi number
+#define STEP 64 ///< increase to improve shape quality
+
 #define WIDTH 1920 ///< width of the screen
 #define HEIGHT 1080 ///< height of the screen
 
@@ -45,10 +48,13 @@ planetProperties planetProp[] = {
         {"neptune", 0.1f, 9.0f, 2.0f, 0.3f}  // neptune
 };
 
+/// moon properties
+planetProperties moonProp = {"moon", 5.0f, 0.3f, 2.0f, 0.05f};
+
 glm::mat4 view = glm::mat4(1.0f); ///< view matrix
 glm::mat4 projection = glm::mat4(1.0f); ///< projection matrix
 
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f)); ///< camera position
+Camera camera(glm::vec3(0.0f, 2.0f, 20.0f)); ///< camera position
 double lastX = WIDTH / 2.0f; ///< last x position of the mouse
 double lastY = HEIGHT / 2.0f; ///< last y position of the mouse
 
@@ -57,8 +63,12 @@ double lastFrame = 0.0f; ///< time of last frame
 
 bool firstMouse = true; ///< check if it's the first time moving the mouse
 
+
 unsigned int sphereVAO = 0; ///< vertex array object for sphere
 GLsizei indexCount; ///< number of indices for sphere
+
+unsigned int orbitVAO[] = {0, 0, 0, 0, 0, 0, 0, 0}; ///< vertex array object for orbit
+unsigned int moonOrbitVAO = 0; ///< vertex array object for moon's orbit
 
 /** Main function that is responsible for the execution of the solar system
  *
@@ -101,6 +111,7 @@ int main() {
     // compile shaders
     Shader planet("shaders/planetVertex.glsl", "shaders/planetFragment.glsl");
     Shader sun("shaders/sunVertex.glsl", "shaders/sunFragment.glsl");
+    Shader orbit("shaders/orbitVertex.glsl", "shaders/orbitFragment.glsl");
 
     // load planet textures
     unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
@@ -148,6 +159,9 @@ int main() {
     glm::vec3 sunLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
     glm::mat4 sunModel = glm::mat4(1.0f);
 
+    // orbit properties
+    glm::mat4 orbitModel = glm::mat4(1.0f);
+
     while (!glfwWindowShouldClose(window)) {
         double currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -186,8 +200,14 @@ int main() {
         planet.setVec3("light.diffuse", diffuseColor);
         planet.setVec3("light.specular", lightColor);
 
-        // render planets
+        // orbit properties
+        orbit.use();
+        orbit.setMat4("projection", projection);
+        orbit.setMat4("view", view);
+        orbit.setVec3("color", sunLightColor); // white color
+
         for (unsigned int i = 0; i < planetCount; i++) {
+            // render planets
             planetModel[i] = planetCreator(
                     planetProp[i].translation, // translation around the sun (translation velocity)
                     planetProp[i].distance, // distance from the sun
@@ -195,20 +215,36 @@ int main() {
                     planetProp[i].scale, // scale of the planet
                     sunModel[3] // center of the model (contains the exact position of the sun)
             );
+            planet.use();
             planet.setMat4("model", planetModel[i]);
             bindTexture(planetTextures[i]);
             renderSphere();
-            if (planetProp[i].name == "earth") { // render moon
+
+            // render planet's orbit
+            orbit.use();
+            orbitModel = glm::translate(glm::mat4(1.0f), glm::vec3(sunModel[3]));
+            orbit.setMat4("model", orbitModel);
+            renderOrbit(planetProp[i].distance, &orbitVAO[i]);
+
+            if (planetProp[i].name == "earth") {
+                // render moon
                 glm::mat4 moonModel = planetCreator(
-                        5.0f, // translation around the earth (translation velocity)
-                        0.3f, // distance from the earth
-                        2.0f, // rotation around its own axis (rotation velocity)
-                        0.05f, // scale of the planet
+                        moonProp.translation, // translation around the earth (translation velocity)
+                        moonProp.distance, // distance from the earth
+                        moonProp.rotation, // rotation around its own axis (rotation velocity)
+                        moonProp.scale, // scale of the planet
                         planetModel[i][3] // center of the model (contains the exact position of the earth)
                 );
+                planet.use();
                 planet.setMat4("model", moonModel);
                 bindTexture(moonTexture);
                 renderSphere();
+
+                // render moon's orbit
+                orbit.use();
+                orbitModel = glm::translate(glm::mat4(1.0f), glm::vec3(planetModel[i][3]));
+                orbit.setMat4("model", orbitModel);
+                renderOrbit(moonProp.distance, &moonOrbitVAO);
             }
         }
 
@@ -218,8 +254,20 @@ int main() {
     }
 
     // de-allocate all resources
+    glDeleteVertexArrays(1, &sphereVAO);
     glDeleteBuffers(1, &sphereVAO);
-    delete[] planetModel;
+
+    glDeleteVertexArrays((GLsizei) planetCount, orbitVAO);
+    glDeleteBuffers((GLsizei) planetCount, orbitVAO);
+
+    glDeleteVertexArrays(1, &moonOrbitVAO);
+    glDeleteBuffers(1, &moonOrbitVAO);
+
+    glDeleteTextures(1, &sunTexture);
+    glDeleteTextures(1, &moonTexture);
+    glDeleteTextures(1, &saturnRingTexture);
+    glDeleteTextures((GLsizei) planetCount, planetTextures);
+
 
     glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
@@ -302,9 +350,7 @@ void renderSphere() {
         std::vector<glm::vec3> normals; // normals
         std::vector<unsigned int> indices;
 
-        const unsigned int STEP = 64; // increase to improve shape quality
-        const float PI = 3.14159265359f;
-        const float distance = 1.0f; // distance from center (0,0)
+        const float radius = 1.0f; // radius from center (0,0)
 
         // create sphere
         for (unsigned int x = 0; x <= STEP; ++x) {
@@ -315,9 +361,9 @@ void renderSphere() {
 
                 // calculate the position of each vertex (same for normals)
                 // see more at: https://mathinsight.org/spherical_coordinates
-                float xPos = distance * std::sin(ySegment * PI) * std::cos(xSegment * 2.0f * PI);
-                float yPos = distance * std::sin(ySegment * PI) * std::sin(xSegment * 2.0f * PI);
-                float zPos = distance * std::cos(ySegment * PI);
+                float xPos = radius * std::sin(ySegment * PI) * std::cos(xSegment * 2.0f * PI);
+                float yPos = radius * std::sin(ySegment * PI) * std::sin(xSegment * 2.0f * PI);
+                float zPos = radius * std::cos(ySegment * PI);
 
                 // add the elements to the end of each vector
                 positions.emplace_back(xPos, yPos, zPos);
@@ -405,6 +451,11 @@ void renderSphere() {
                 (void *) (6 * sizeof(float)) // array buffer offset
         );
         glEnableVertexAttribArray(2);
+
+#ifdef _DEBUG
+        std::cout << "New sphere created" << std::endl;
+#endif
+
     }
 
     glBindVertexArray(sphereVAO);
@@ -412,6 +463,66 @@ void renderSphere() {
     // GL_TRIANGLE_STRIP is to ensure that the triangles are all drawn with the same orientation
     // see more at: https://www.khronos.org/opengl/wiki/Primitive#Triangle_primitives
     glDrawElements(GL_TRIANGLE_STRIP, indexCount, GL_UNSIGNED_INT, nullptr);
+}
+
+/** Function to build orbit
+ *
+ * @param radius: radius of the circle
+ * @param VAO: vertex array object
+ *
+ */
+void renderOrbit(float radius, unsigned int *VAO) {
+    if (*VAO == 0) { // first time initializing the orbit
+        glGenVertexArrays(1, VAO);
+
+        // vertex buffer object, element buffer object
+        unsigned int vbo;
+        glGenBuffers(1, &vbo);
+
+        std::vector<glm::vec3> vertices;
+
+        float angle = 360.0f / STEP; // angle between each vertex
+
+        // create circle
+        for (unsigned int i = 0; i < STEP; i++) {
+            float currentAngle = angle * (float) i;
+
+            // calculate the position of each vertex
+            // see more at: https://faun.pub/draw-circle-in-opengl-c-2da8d9c2c103
+            float x = radius * std::cos(glm::radians(currentAngle));
+            float y = 0.0f;
+            float z = radius * std::sin(glm::radians(currentAngle));
+
+            // infinite points in the circle correction
+            if (currentAngle == 90.0f || currentAngle == 270.0f) x = 0.0f;
+            else if (currentAngle == 0.0f || currentAngle == 180.0f) z = 0.0f;
+
+            // add the elements to the end of each vector
+            vertices.emplace_back(x, y, z);
+        }
+
+        glBindVertexArray(*VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+
+        // vertex attribute
+        glVertexAttribPointer(
+                0, // attribute
+                3, // size
+                GL_FLOAT, // type
+                GL_FALSE, // normalized?
+                3 * sizeof(float), // stride
+                (void *) nullptr // array buffer offset
+        );
+        glEnableVertexAttribArray(0);
+
+#ifdef _DEBUG
+        std::cout << "New orbit created" << std::endl;
+#endif
+
+    }
+    glBindVertexArray(*VAO);
+    glDrawArrays(GL_LINE_LOOP, 0, STEP); // orbit mode
 }
 
 /** Function to load 2D texture from file

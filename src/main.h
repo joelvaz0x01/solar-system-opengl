@@ -21,6 +21,8 @@ unsigned int loadTexture(const char *path);
 
 void renderSphere();
 
+void renderOrbit(float radius, unsigned int *VAO);
+
 void bindTexture(unsigned int texture);
 
 glm::mat4 planetCreator(float translation, float distance, float rotation, float scale, glm::vec3 centerModel);
