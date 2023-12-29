@@ -10,6 +10,11 @@ set(SOLAR_SYSTEM solar_system.out)
 
 add_subdirectory(include)
 
+if(APPLE)
+    find_package(Freetype REQUIRED)
+    message(STATUS "Found Freetype in ${FREETYPE_INCLUDE_DIRS}")
+endif(APPLE)
+
 include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/glfw/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include/glad/include
@@ -23,6 +28,7 @@ set(ALL_LIBS
         ${OPENGL_LIBRARY}
         glfw
         GLAD
+        freetype
 )
 
 file(GLOB SHADERS
@@ -31,7 +37,7 @@ file(GLOB SHADERS
 
 file(GLOB SRC_SOLAR_SYSTEM
         "src/*.h"
-        "src/*.cpp"
+        "src/main.cpp"
         ${SHADERS}
 )
 

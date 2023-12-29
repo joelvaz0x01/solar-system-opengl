@@ -17,10 +17,13 @@
  */
 
 #include <iostream>
+#include <map>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #define STB_IMAGE_IMPLEMENTATION ///< to avoid linker errors
 
@@ -35,6 +38,9 @@
 
 #define WIDTH 1920 ///< width of the screen
 #define HEIGHT 1080 ///< height of the screen
+
+#define CHAR_SPACE 27.0f ///< space occupied by each character
+#define CHAR_HEIGHT 25.0f ///< max height of each character
 
 /// planet properties
 planetProperties planetProp[] = {
@@ -57,18 +63,19 @@ glm::mat4 projection = glm::mat4(1.0f); ///< projection matrix
 Camera camera(glm::vec3(0.0f, 2.0f, 20.0f)); ///< camera position
 double lastX = WIDTH / 2.0f; ///< last x position of the mouse
 double lastY = HEIGHT / 2.0f; ///< last y position of the mouse
+bool firstMouse = true; ///< check if it's the first time moving the mouse
 
 double deltaTime = 0.0f; ///< time between current frame and last frame
 double lastFrame = 0.0f; ///< time of last frame
-
-bool firstMouse = true; ///< check if it's the first time moving the mouse
-
 
 unsigned int sphereVAO = 0; ///< vertex array object for sphere
 GLsizei indexCount; ///< number of indices for sphere
 
 unsigned int orbitVAO[] = {0, 0, 0, 0, 0, 0, 0, 0}; ///< vertex array object for orbit
 unsigned int moonOrbitVAO = 0; ///< vertex array object for moon's orbit
+
+std::map<GLchar, Character> Characters; ///< map for FreeType character
+unsigned int textVAO, textVBO; ///< vertex array object and vertex buffer object for text
 
 /** Main function that is responsible for the execution of the solar system
  *
@@ -107,11 +114,90 @@ int main() {
 
     // per-sample processing operation performed after the Fragment Shader
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // compile shaders
     Shader planet("shaders/planetVertex.glsl", "shaders/planetFragment.glsl");
     Shader sun("shaders/sunVertex.glsl", "shaders/sunFragment.glsl");
     Shader orbit("shaders/orbitVertex.glsl", "shaders/orbitFragment.glsl");
+    Shader text("shaders/textVertex.glsl", "shaders/textFragment.glsl");
+
+    //load freetype
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft)) {
+        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        return -1;
+    }
+
+    //load font
+    FT_Face face;
+    if (FT_New_Face(ft, "resources/fonts/MPLUSRounded1c-Bold.ttf", 0, &face)) {
+        std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
+        return -1;
+    } else {
+        // set size to load glyphs as
+        FT_Set_Pixel_Sizes(face, 0, 48);
+
+        // disable byte-alignment restriction
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        // load the first 128 characters of ASCII set
+        for (GLubyte c = 0; c < 128; c++) {
+            // load character glyph
+            if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+                std::cout << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
+                continue;
+            }
+
+            // generate texture
+            unsigned int texture;
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(
+                    GL_TEXTURE_2D,
+                    0,
+                    GL_RED,
+                    (GLsizei) face->glyph->bitmap.width,
+                    (GLsizei) face->glyph->bitmap.rows,
+                    0,
+                    GL_RED,
+                    GL_UNSIGNED_BYTE,
+                    face->glyph->bitmap.buffer
+            );
+
+            // set texture options
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            // store character for later use
+            Character character = {
+                    texture,
+                    glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+                    glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+                    static_cast<unsigned int>(face->glyph->advance.x)
+            };
+            Characters.insert(std::pair<char, Character>(c, character));
+        }
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    // destroy FreeType once we're finished
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
+
+    // configure textVAO/textVBO for texture quads
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 6 * 4, nullptr, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void *) nullptr);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
     // load planet textures
     unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
@@ -161,6 +247,19 @@ int main() {
 
     // orbit properties
     glm::mat4 orbitModel = glm::mat4(1.0f);
+
+    // text properties
+    std::string startText = "Solar System";
+    auto startTextLength = static_cast<float>(startText.length());
+    float startTextScale = 0.8f;
+    glm::vec3 textColor = glm::vec3(0.9f, 0.9f, 0.9f); // light-gray color
+
+    // NOTE: to render fixed text, projection matrix must be orthographic (2D) instead of perspective (3D)
+    // in this case: 0 <= x <= WIDTH && 0 <= y <= HEIGHT
+    projection = glm::ortho(0.0f, static_cast<float>(WIDTH), 0.0f, static_cast<float>(HEIGHT));
+
+    text.use();
+    text.setMat4("projection", projection);
 
     while (!glfwWindowShouldClose(window)) {
         double currentFrame = glfwGetTime();
@@ -248,6 +347,16 @@ int main() {
             }
         }
 
+        // render project's name text
+        renderText(
+                text,
+                startText,
+                WIDTH - charSpaceScaled(startTextLength, startTextScale),
+                charHeightScaled(startTextScale),
+                startTextScale,
+                textColor
+        );
+
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -260,6 +369,9 @@ int main() {
     glDeleteVertexArrays((GLsizei) planetCount, orbitVAO);
     glDeleteBuffers((GLsizei) planetCount, orbitVAO);
 
+    glDeleteVertexArrays(1, &textVAO);
+    glDeleteBuffers(1, &textVBO);
+
     glDeleteVertexArrays(1, &moonOrbitVAO);
     glDeleteBuffers(1, &moonOrbitVAO);
 
@@ -267,7 +379,6 @@ int main() {
     glDeleteTextures(1, &moonTexture);
     glDeleteTextures(1, &saturnRingTexture);
     glDeleteTextures((GLsizei) planetCount, planetTextures);
-
 
     glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
@@ -457,7 +568,6 @@ void renderSphere() {
 #endif
 
     }
-
     glBindVertexArray(sphereVAO);
 
     // GL_TRIANGLE_STRIP is to ensure that the triangles are all drawn with the same orientation
@@ -523,6 +633,62 @@ void renderOrbit(float radius, unsigned int *VAO) {
     }
     glBindVertexArray(*VAO);
     glDrawArrays(GL_LINE_LOOP, 0, STEP); // orbit mode
+}
+
+/** Function to render text
+ *
+ * @param shader: shader to render text
+ * @param text: text to render
+ * @param x: x position of text
+ * @param y: y position of text
+ * @param scale: scale of text
+ * @param color: color of text
+ * @param VAO: vertex array object
+ *
+ */
+void renderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color) {
+    shader.use();
+    shader.setVec3("textColor", color.x, color.y, color.z);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(textVAO);
+
+    // iterate through all characters
+    std::string::const_iterator c;
+    for (c = text.begin(); c != text.end(); c++) {
+        Character ch = Characters[*c];
+
+        float x_pos = x + (float) ch.bearing.x * scale;
+        float y_pos = y - (float) (ch.size.y - ch.bearing.y) * scale;
+
+        float w = (float) ch.size.x * scale;
+        float h = (float) ch.size.y * scale;
+
+        float vertices[6][4] = { // 2 for position, 2 for texture
+                {x_pos,     y_pos + h, 0.0f, 0.0f}, // bottom left
+                {x_pos,     y_pos,     0.0f, 1.0f}, // top left
+                {x_pos + w, y_pos,     1.0f, 1.0f}, // top right
+
+                {x_pos,     y_pos + h, 0.0f, 0.0f}, // bottom left
+                {x_pos + w, y_pos,     1.0f, 1.0f}, // top right
+                {x_pos + w, y_pos + h, 1.0f, 0.0f} // bottom right
+        };
+        // render glyph texture over quad
+        glBindTexture(GL_TEXTURE_2D, ch.textureID);
+        // update content of VBO memory
+        glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+        // NOTE: use glBufferSubData and not glBufferData
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // render quad
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // advance cursors for the next glyph (NOTE: advance is number of 1/64 pixels)
+        // 2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels)
+        x += (float) (ch.advance >> 6) * scale; // bitshift by 6 to get value in pixels
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /** Function to load 2D texture from file
@@ -591,4 +757,25 @@ glm::mat4 planetCreator(float translation, float distance, float rotation, float
     model = glm::rotate(model, (float) glfwGetTime() * rotation, glm::vec3(0.0f, 1.0f, 0.0f));
     model = glm::scale(model, glm::vec3(scale));
     return model; // center * translation * distance * rotation * scale
+}
+
+/** Function to scale char space
+ *
+ * @param charSpace: char space to scale
+ * @param scale: scale of char space
+ * @return scaled char space
+ *
+ */
+float charSpaceScaled(float textLength, float scale) {
+    return textLength * CHAR_SPACE * scale;
+}
+
+/** Function to scale char height
+ *
+ * @param scale: scale of char height
+ * @return scaled char height
+ *
+ */
+float charHeightScaled(float scale) {
+    return CHAR_HEIGHT * scale;
 }
