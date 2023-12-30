@@ -8,11 +8,12 @@
  * - E key: move the camera up
  * - Mouse: look around
  * - Mouse scroll-wheel: zoom in and out
+ * - 1, 2, 3, 4, 5, 6, 7 and 8 keys: change the camera position to the planet (NUMPAD also works)
+ * - SPACE key: reset camera position
  * - ESC key: close the window
  *
  * @author joelvaz0x01
  * @author BrunoFG1
- * @date 2023-12-14
  *
  */
 
@@ -34,33 +35,58 @@
 #include "main.h"
 
 #define PI 3.14159265359f ///< pi number
-#define STEP 64 ///< increase to improve shape quality
+#define STEP 256 ///< increase to improve shape quality
 
 #define WIDTH 1920 ///< width of the screen
 #define HEIGHT 1080 ///< height of the screen
 
-#define CHAR_SPACE 27.0f ///< space occupied by each character
-#define CHAR_HEIGHT 25.0f ///< max height of each character
+// values are adjusted if scale = 1.0f
+#define CHAR_WIDTH_UP 27.0f ///< additional font space when x = WIDTH
+#define CHAR_WIDTH_DOWN 25.0f ///< additional font start space when x = 0
+#define CHAR_HEIGHT_UP 60.0f ///< additional font space when y = HEIGHT
+#define CHAR_HEIGHT_DOWN 25.0f ///< additional font space when y = 0
+
+/// planet information
+/// see more at: https://science.nasa.gov/solar-system/planets/
+/// and at: https://nssdc.gsfc.nasa.gov/planetary/factsheet/
+planetInfo planetInfo[] = {
+        {"Mercury", "0.4 astronomical units",  "2,440 km",  "0 moons",   "59 Earth days",    "88 Earth days"},
+        {"Venus",   "0.72 astronomical units", "6,051 km",  "0 moons",   "243 Earth days",   "225 Earth days"},
+        {"Earth",   "1.0 astronomical unit",   "6,378 km",  "1 moon",    "1 Earth day",      "365 Earth days"},
+        {"Mars",    "1.5 astronomical units",  "3,390 km",  "2 moons",   "23.9 Earth hours", "687 Earth days"},
+        {"Jupiter", "5.2 astronomical units",  "69,911 km", "95 moons",  "10 Earth hours",   "4,333 Earth days"},
+        {"Saturn",  "9.5 astronomical units",  "58,232 km", "146 moons", "10.7 Earth hours", "10,756 Earth days"},
+        {"Uranus",  "19.8 astronomical units", "25,362 km", "27 moons",  "17 Earth hours",   "30,687 Earth days"},
+        {"Neptune", "30 astronomical units",   "24,622 km", "14 moons",  "16 Earth hours",   "60,190 Earth days"}
+};
 
 /// planet properties
 planetProperties planetProp[] = {
-        {"mercury", 2.0f, 2.0f, 2.0f, 0.1f}, // mercury
-        {"venus",   1.5f, 3.0f, 2.0f, 0.1f}, // venus
-        {"earth",   1.0f, 4.0f, 2.0f, 0.1f}, // earth
-        {"mars",    0.8f, 5.0f, 2.0f, 0.1f}, // mars
-        {"jupiter", 0.6f, 6.0f, 2.0f, 0.3f}, // jupiter
-        {"saturn",  0.3f, 7.0f, 2.0f, 0.3f}, // saturn
-        {"uranus",  0.2f, 8.0f, 2.0f, 0.3f}, // uranus
-        {"neptune", 0.1f, 9.0f, 2.0f, 0.3f}  // neptune
+        {2.0f, 2.0f, 0.3f, 0.04f}, // mercury
+        {1.5f, 3.0f, 0.4f, 0.1f}, // venus
+        {1.0f, 4.0f, 0.5f, 0.1f}, // earth
+        {0.8f, 5.0f, 0.6f, 0.09f}, // mars
+        {0.6f, 6.0f, 0.7f, 0.3f}, // jupiter
+        {0.3f, 7.0f, 0.8f, 0.4f}, // saturn
+        {0.2f, 8.0f, 1.0f, 0.35f}, // uranus
+        {0.1f, 9.0f, 0.9f, 0.35f}  // neptune
 };
 
 /// moon properties
-planetProperties moonProp = {"moon", 5.0f, 0.3f, 2.0f, 0.05f};
+planetProperties moonProp = {6.0f, 0.3f, 3.0f, 0.03f};
 
 glm::mat4 view = glm::mat4(1.0f); ///< view matrix
 glm::mat4 projection = glm::mat4(1.0f); ///< projection matrix
 
-Camera camera(glm::vec3(0.0f, 2.0f, 20.0f)); ///< camera position
+/// current camera position
+Camera camera(
+        glm::vec3(0.0f, 25.0f, 0.0f), // position
+        glm::vec3(0.0f, 1.0f, 0.0f), // up - default
+        -90.0f, // yaw - default
+        -89.0f // pitch (look down)
+);
+Camera freeCamera = camera; ///< free camera mode position
+
 double lastX = WIDTH / 2.0f; ///< last x position of the mouse
 double lastY = HEIGHT / 2.0f; ///< last y position of the mouse
 bool firstMouse = true; ///< check if it's the first time moving the mouse
@@ -75,7 +101,10 @@ unsigned int orbitVAO[] = {0, 0, 0, 0, 0, 0, 0, 0}; ///< vertex array object for
 unsigned int moonOrbitVAO = 0; ///< vertex array object for moon's orbit
 
 std::map<GLchar, Character> Characters; ///< map for FreeType character
-unsigned int textVAO, textVBO; ///< vertex array object and vertex buffer object for text
+unsigned int textVAO; ///< vertex array object for text
+unsigned int textVBO; ///< vertex buffer object for text
+
+unsigned int focusPlanet = 8; ///< focus planet mode
 
 /** Main function that is responsible for the execution of the solar system
  *
@@ -92,7 +121,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Cube Texture", glfwGetPrimaryMonitor() /*nullptr*/, nullptr);
+    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Solar System", glfwGetPrimaryMonitor() /*nullptr*/, nullptr);
     if (window == nullptr) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -250,9 +279,16 @@ int main() {
 
     // text properties
     std::string startText = "Solar System";
-    auto startTextLength = static_cast<float>(startText.length());
+    std::basic_string<char>::size_type startTextLength = startText.length();
     float startTextScale = 0.8f;
-    glm::vec3 textColor = glm::vec3(0.9f, 0.9f, 0.9f); // light-gray color
+
+    std::string freeModeText = "Free Camera Mode";
+    std::basic_string<char>::size_type freeModeTextLength = freeModeText.length();
+    float freeModeTextScale = 1.0f;
+
+    float planetInfoTextScale = 0.8f;
+
+    glm::vec3 textColor = glm::vec3(1.0f, 1.0f, 1.0f); // white color
 
     // NOTE: to render fixed text, projection matrix must be orthographic (2D) instead of perspective (3D)
     // in this case: 0 <= x <= WIDTH && 0 <= y <= HEIGHT
@@ -325,7 +361,7 @@ int main() {
             orbit.setMat4("model", orbitModel);
             renderOrbit(planetProp[i].distance, &orbitVAO[i]);
 
-            if (planetProp[i].name == "earth") {
+            if (planetInfo[i].name == "Earth") {
                 // render moon
                 glm::mat4 moonModel = planetCreator(
                         moonProp.translation, // translation around the earth (translation velocity)
@@ -351,11 +387,32 @@ int main() {
         renderText(
                 text,
                 startText,
-                WIDTH - charSpaceScaled(startTextLength, startTextScale),
-                charHeightScaled(startTextScale),
+                charWidthScaled(startTextScale, startTextLength, true),
+                charHeightScaled(startTextScale, false),
                 startTextScale,
                 textColor
         );
+
+        // render planet's information text when focusPlanet != 8
+        if (focusPlanet != 8) {
+            camera = Camera(
+                    glm::vec3(planetModel[focusPlanet][3]) + glm::vec3(0.0f, 1.2f, 1.0f), // position
+                    glm::vec3(0.0f, 1.0f, 0.0f), // up - default
+                    -90.0f, // yaw - default
+                    -50.0f // pitch (look down)
+            );
+            showPlanetInfo(text, focusPlanet, textColor, planetInfoTextScale);
+        } else {
+            freeCamera = camera; // save current camera position
+            renderText(
+                    text,
+                    freeModeText,
+                    charWidthScaled(freeModeTextScale, freeModeTextLength, false),
+                    charHeightScaled(freeModeTextScale, true),
+                    freeModeTextScale,
+                    textColor
+            );
+        }
 
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
@@ -398,6 +455,27 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT, (float) deltaTime);
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(UPWARD, (float) deltaTime);
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(DOWNWARD, (float) deltaTime);
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) { // reset camera position
+        camera = freeCamera;
+        focusPlanet = 8;
+    }
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS)
+        focusPlanet = 0; // mercury
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS)
+        focusPlanet = 1; // venus
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_3) == GLFW_PRESS)
+        focusPlanet = 2; // earth
+    if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS)
+        focusPlanet = 3; // mars
+    if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_5) == GLFW_PRESS)
+        focusPlanet = 4; // jupiter
+    if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS)
+        focusPlanet = 5; // saturn
+    if (glfwGetKey(window, GLFW_KEY_7) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_7) == GLFW_PRESS)
+        focusPlanet = 6; // uranus
+    if (glfwGetKey(window, GLFW_KEY_8) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS)
+        focusPlanet = 7; // neptune
 }
 
 /** Function to resize window size if changed (by OS or user resize)
@@ -643,13 +721,12 @@ void renderOrbit(float radius, unsigned int *VAO) {
  * @param y: y position of text
  * @param scale: scale of text
  * @param color: color of text
- * @param VAO: vertex array object
  *
  */
 void renderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color) {
     shader.use();
     shader.setVec3("textColor", color.x, color.y, color.z);
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE);
     glBindVertexArray(textVAO);
 
     // iterate through all characters
@@ -736,7 +813,7 @@ unsigned int loadTexture(char const *path) {
  *
  */
 void bindTexture(unsigned int texture) {
-    glActiveTexture(GL_TEXTURE);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
 }
 
@@ -759,23 +836,68 @@ glm::mat4 planetCreator(float translation, float distance, float rotation, float
     return model; // center * translation * distance * rotation * scale
 }
 
-/** Function to scale char space
- *
- * @param charSpace: char space to scale
- * @param scale: scale of char space
- * @return scaled char space
- *
- */
-float charSpaceScaled(float textLength, float scale) {
-    return textLength * CHAR_SPACE * scale;
-}
-
 /** Function to scale char height
  *
  * @param scale: scale of char height
+ * @param isMaxHeight: check if the character is at the top of the screen
  * @return scaled char height
  *
  */
-float charHeightScaled(float scale) {
-    return CHAR_HEIGHT * scale;
+float charHeightScaled(float scale, bool isMaxHeight) {
+    float result; // correction to apply when the character is not at the top of the screen
+
+    if (isMaxHeight) result = HEIGHT - CHAR_HEIGHT_UP * scale;
+    else result = CHAR_HEIGHT_DOWN * scale;
+
+    return result;
+}
+
+
+/** Function to scale char width
+ *
+ * @param scale: scale of char width
+ * @param textLength: length of the text
+ * @param isMaxWidth: check if the character is at the right of the screen
+ * @return scaled char width
+ *
+ */
+float charWidthScaled(float scale, std::basic_string<char>::size_type textLength, bool isMaxWidth) {
+    float result; // correction to apply when the character is not at the top of the screen
+
+    if (isMaxWidth) result = WIDTH - static_cast<float>(textLength) * CHAR_WIDTH_UP * scale;
+    else result = CHAR_WIDTH_DOWN * scale;
+
+    return result;
+}
+
+/** Function to show planet information
+ *
+ * @param shader: shader to show planet information
+ * @param planetIndex: index of the planet to use in planetInfo
+ * @param textColor: color of the text
+ * @param textScale: scale of the text
+ *
+ */
+void showPlanetInfo(Shader &shader, unsigned int planetIndex, glm::vec3 textColor, float textScale) {
+    std::string planetInfoText[] = {
+            "Name: " + planetInfo[planetIndex].name,
+            "Distance: " + planetInfo[planetIndex].distance,
+            "Radius: " + planetInfo[planetIndex].radius,
+            "Moons number: " + planetInfo[planetIndex].moons,
+            "Rotation duration: " + planetInfo[planetIndex].rotationPeriod,
+            "Translation duration: " + planetInfo[planetIndex].orbitalPeriod,
+    };
+
+    int planetInfoTextSize = sizeof(planetInfoText) / sizeof(planetInfoText[0]);
+
+    for (int i = 0; i < planetInfoTextSize; i++) {
+        renderText(
+                shader,
+                planetInfoText[i],
+                charWidthScaled(textScale, planetInfoText[i].length(), false),
+                charHeightScaled(textScale, true) - ((float) i * 50.0f),
+                textScale,
+                textColor
+        );
+    }
 }

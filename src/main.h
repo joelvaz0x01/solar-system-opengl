@@ -31,7 +31,6 @@ glm::mat4 planetCreator(float translation, float distance, float rotation, float
 
 /// Store the properties of a planet
 struct planetProperties {
-    std::string name; ///< name of the planet
     float translation; ///< translation around the sun
     float distance; ///< distance from the sun
     float rotation; ///< rotation around its own axis
@@ -46,6 +45,18 @@ struct Character {
     unsigned int advance; ///< Horizontal offset to advance to next glyph
 };
 
-float charSpaceScaled(float textLength, float scale);
+/// Struct for planet information
+struct planetInfo {
+    std::string name; ///< name of the planet
+    std::string distance; ///< distance from the sun to the planet
+    std::string radius; ///< radius of the planet
+    std::string moons; ///< number of moons the planet has
+    std::string rotationPeriod; ///< rotation period around its own axis
+    std::string orbitalPeriod; ///< orbital period around the sun
+};
 
-float charHeightScaled(float scale);
+float charHeightScaled(float scale, bool isMaxHeight);
+
+float charWidthScaled(float scale, std::basic_string<char>::size_type textLength, bool isMaxWidth);
+
+void showPlanetInfo(Shader &shader, unsigned int planetIndex, glm::vec3 textColor, float textScale);
