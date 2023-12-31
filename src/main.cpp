@@ -8,8 +8,9 @@
  * - E key: move the camera up
  * - Mouse: look around
  * - Mouse scroll-wheel: zoom in and out
- * - 1, 2, 3, 4, 5, 6, 7 and 8 keys: change the camera position to the planet (NUMPAD also works)
- * - SPACE key: reset camera position
+ * - 0 key: top view camera mode
+ * - 1 to 8 keys: focus on a planet (NUMPAD also works)
+ * - SPACE key: free camera mode
  * - ESC key: close the window
  *
  * @author joelvaz0x01
@@ -80,6 +81,12 @@ glm::mat4 projection = glm::mat4(1.0f); ///< projection matrix
 
 /// current camera position
 Camera camera(
+        glm::vec3(0.0f, 8.0f, 15.0f), // position
+        glm::vec3(0.0f, 1.0f, 0.0f), // up - default
+        -90.0f, // yaw - default
+        -35.0f // pitch (look down)
+);
+Camera upViewCamera(
         glm::vec3(0.0f, 25.0f, 0.0f), // position
         glm::vec3(0.0f, 1.0f, 0.0f), // up - default
         -90.0f, // yaw - default
@@ -104,7 +111,9 @@ std::map<GLchar, Character> Characters; ///< map for FreeType character
 unsigned int textVAO; ///< vertex array object for text
 unsigned int textVBO; ///< vertex buffer object for text
 
-unsigned int focusPlanet = 8; ///< focus planet mode
+unsigned int cameraMode = 8; ///< focus planet mode
+
+unsigned int skyboxVAO = 0; ///< vertex array object for skybox
 
 /** Main function that is responsible for the execution of the solar system
  *
@@ -151,6 +160,7 @@ int main() {
     Shader sun("shaders/sunVertex.glsl", "shaders/sunFragment.glsl");
     Shader orbit("shaders/orbitVertex.glsl", "shaders/orbitFragment.glsl");
     Shader text("shaders/textVertex.glsl", "shaders/textFragment.glsl");
+    Shader skybox("shaders/skyboxVertex.glsl", "shaders/skyboxFragment.glsl");
 
     //load freetype
     FT_Library ft;
@@ -229,25 +239,36 @@ int main() {
     glBindVertexArray(0);
 
     // load planet textures
-    unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
+    unsigned int sunTexture = loadTexture("resources/textures/planets/sun.jpg");
 
     // load planet textures
     unsigned int planetTextures[] = {
-            loadTexture("resources/textures/mercury.jpg"),
-            loadTexture("resources/textures/venus.jpg"),
-            loadTexture("resources/textures/earth.jpg"),
-            loadTexture("resources/textures/mars.jpg"),
-            loadTexture("resources/textures/jupiter.jpg"),
-            loadTexture("resources/textures/saturn.jpg"),
-            loadTexture("resources/textures/uranus.jpg"),
-            loadTexture("resources/textures/neptune.jpg")
+            loadTexture("resources/textures/planets/mercury.jpg"),
+            loadTexture("resources/textures/planets/venus.jpg"),
+            loadTexture("resources/textures/planets/earth.jpg"),
+            loadTexture("resources/textures/planets/mars.jpg"),
+            loadTexture("resources/textures/planets/jupiter.jpg"),
+            loadTexture("resources/textures/planets/saturn.jpg"),
+            loadTexture("resources/textures/planets/uranus.jpg"),
+            loadTexture("resources/textures/planets/neptune.jpg")
     };
 
     // load earth's moon texture
-    unsigned int moonTexture = loadTexture("resources/textures/moon.jpg");
+    unsigned int moonTexture = loadTexture("resources/textures/planets/moon.jpg");
 
-    // load saturn's ring texture
-    unsigned int saturnRingTexture = loadTexture("resources/textures/saturn_ring.png");
+    // load skybox texture
+    // NOTE: skybox textures must be in square format (same width and height)
+    // NOTE: must be in this order: right(+x), left(-x), top(+y), bottom(-y), front(+z), back(-z)
+    // see more at: https://learnopengl.com/Advanced-OpenGL/Cubemaps
+    const char *skyboxTextures[] = {
+            "resources/textures/skybox/stars_right.png", // right side (+x)
+            "resources/textures/skybox/stars_left.png", // left side (-x)
+            "resources/textures/skybox/stars_top.png", // top side (+y)
+            "resources/textures/skybox/stars_bottom.png", // bottom side (-y)
+            "resources/textures/skybox/stars_front.png", // front side (+z)
+            "resources/textures/skybox/stars_back.png" // back side (-z)
+    };
+    unsigned int skyboxCubeMap = loadCubeMap(skyboxTextures);
 
     // number of planets
     unsigned int planetCount = sizeof(planetTextures) / sizeof(planetTextures[0]);
@@ -255,7 +276,7 @@ int main() {
     // model matrix for each planet
     auto *planetModel = new glm::mat4[planetCount];
 
-    // light configuration
+    // sun shader configuration
     sun.use();
     sun.setInt("texture1", 0);
 
@@ -286,6 +307,10 @@ int main() {
     std::basic_string<char>::size_type freeModeTextLength = freeModeText.length();
     float freeModeTextScale = 1.0f;
 
+    std::string upViewText = "Top View Camera Mode";
+    std::basic_string<char>::size_type upViewTextLength = upViewText.length();
+    float upViewTextScale = 1.0f;
+
     float planetInfoTextScale = 0.8f;
 
     glm::vec3 textColor = glm::vec3(1.0f, 1.0f, 1.0f); // white color
@@ -310,12 +335,12 @@ int main() {
         projection = glm::perspective(glm::radians(camera.Zoom), (float) WIDTH / (float) HEIGHT, 0.1f, 100.0f);
         view = camera.GetViewMatrix();
 
-        // light properties (phong shading)
+        // sun properties (phong shading)
         lightColor = sunLightColor;
         diffuseColor = lightColor * glm::vec3(0.8f);
         ambientColor = diffuseColor * glm::vec3(0.1f);
 
-        // light properties (sun)
+        // sun properties
         sun.use();
         sun.setVec3("color", lightColor);
         sun.setMat4("projection", projection);
@@ -393,16 +418,25 @@ int main() {
                 textColor
         );
 
-        // render planet's information text when focusPlanet != 8
-        if (focusPlanet != 8) {
+        if (cameraMode == 9) { // render top view camera mode
+            camera = upViewCamera;
+            renderText(
+                    text,
+                    upViewText,
+                    charWidthScaled(upViewTextScale, upViewTextLength, false),
+                    charHeightScaled(upViewTextScale, true),
+                    upViewTextScale,
+                    textColor
+            );
+        } else if (cameraMode != 8) { // render planet's information camera mode
             camera = Camera(
-                    glm::vec3(planetModel[focusPlanet][3]) + glm::vec3(0.0f, 1.2f, 1.0f), // position
+                    glm::vec3(planetModel[cameraMode][3]) + glm::vec3(0.0f, 1.2f, 1.0f), // position
                     glm::vec3(0.0f, 1.0f, 0.0f), // up - default
                     -90.0f, // yaw - default
                     -50.0f // pitch (look down)
             );
-            showPlanetInfo(text, focusPlanet, textColor, planetInfoTextScale);
-        } else {
+            showPlanetInfo(text, cameraMode, textColor, planetInfoTextScale);
+        } else { // render free camera mode
             freeCamera = camera; // save current camera position
             renderText(
                     text,
@@ -414,6 +448,12 @@ int main() {
             );
         }
 
+        // render skybox
+        skybox.use();
+        skybox.setMat4("projection", projection);
+        skybox.setMat4("view", glm::mat4(glm::mat3(camera.GetViewMatrix())));
+        renderSkybox(skyboxCubeMap);
+
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -421,21 +461,22 @@ int main() {
 
     // de-allocate all resources
     glDeleteVertexArrays(1, &sphereVAO);
-    glDeleteBuffers(1, &sphereVAO);
-
-    glDeleteVertexArrays((GLsizei) planetCount, orbitVAO);
-    glDeleteBuffers((GLsizei) planetCount, orbitVAO);
-
+    for (unsigned int &i: orbitVAO) {
+        glDeleteVertexArrays(1, &i);
+    }
+    glDeleteVertexArrays(1, &moonOrbitVAO);
     glDeleteVertexArrays(1, &textVAO);
     glDeleteBuffers(1, &textVBO);
-
-    glDeleteVertexArrays(1, &moonOrbitVAO);
-    glDeleteBuffers(1, &moonOrbitVAO);
+    glDeleteVertexArrays(1, &skyboxVAO);
 
     glDeleteTextures(1, &sunTexture);
+    for (unsigned int &planetTexture: planetTextures) {
+        glDeleteTextures(1, &planetTexture);
+    }
     glDeleteTextures(1, &moonTexture);
-    glDeleteTextures(1, &saturnRingTexture);
-    glDeleteTextures((GLsizei) planetCount, planetTextures);
+    glDeleteTextures(1, &skyboxCubeMap);
+
+    delete[] planetModel;
 
     glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
@@ -456,26 +497,28 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(UPWARD, (float) deltaTime);
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(DOWNWARD, (float) deltaTime);
 
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) { // reset camera position
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) { // reset camera position to free camera mode
         camera = freeCamera;
-        focusPlanet = 8;
+        cameraMode = 8;
     }
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS)
-        focusPlanet = 0; // mercury
+        cameraMode = 0; // mercury camera mode
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS)
-        focusPlanet = 1; // venus
+        cameraMode = 1; // venus camera mode
     if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_3) == GLFW_PRESS)
-        focusPlanet = 2; // earth
+        cameraMode = 2; // earth camera mode
     if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS)
-        focusPlanet = 3; // mars
+        cameraMode = 3; // mars camera mode
     if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_5) == GLFW_PRESS)
-        focusPlanet = 4; // jupiter
+        cameraMode = 4; // jupiter camera mode
     if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS)
-        focusPlanet = 5; // saturn
+        cameraMode = 5; // saturn camera mode
     if (glfwGetKey(window, GLFW_KEY_7) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_7) == GLFW_PRESS)
-        focusPlanet = 6; // uranus
+        cameraMode = 6; // uranus camera mode
     if (glfwGetKey(window, GLFW_KEY_8) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS)
-        focusPlanet = 7; // neptune
+        cameraMode = 7; // neptune camera mode
+    if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_0) == GLFW_PRESS)
+        cameraMode = 9; // top view camera mode
 }
 
 /** Function to resize window size if changed (by OS or user resize)
@@ -768,6 +811,94 @@ void renderText(Shader &shader, std::string text, float x, float y, float scale,
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+/** Function to render skybox
+ *
+ * @param skyboxVertices: skybox vertices
+ * @param skyboxTexture: skybox texture
+ *
+ */
+void renderSkybox(unsigned int skyboxTexture) {
+    if (skyboxVAO == 0) { // first time initializing the skybox
+        float skyboxVertices[] = { // cube to render skybox
+                // bottom side
+                -0.5f, -0.5f, -0.5f,
+                0.5f, -0.5f, -0.5f,
+                0.5f, 0.5f, -0.5f,
+                0.5f, 0.5f, -0.5f,
+                -0.5f, 0.5f, -0.5f,
+                -0.5f, -0.5f, -0.5f,
+
+                // upper side
+                -0.5f, -0.5f, 0.5f,
+                0.5f, -0.5f, 0.5f,
+                0.5f, 0.5f, 0.5f,
+                0.5f, 0.5f, 0.5f,
+                -0.5f, 0.5f, 0.5f,
+                -0.5f, -0.5f, 0.5f,
+
+                // back side
+                -0.5f, 0.5f, 0.5f,
+                -0.5f, 0.5f, -0.5f,
+                -0.5f, -0.5f, -0.5f,
+                -0.5f, -0.5f, -0.5f,
+                -0.5f, -0.5f, 0.5f,
+                -0.5f, 0.5f, 0.5f,
+
+                // front side
+                0.5f, 0.5f, 0.5f,
+                0.5f, 0.5f, -0.5f,
+                0.5f, -0.5f, -0.5f,
+                0.5f, -0.5f, -0.5f,
+                0.5f, -0.5f, 0.5f,
+                0.5f, 0.5f, 0.5f,
+
+                // left side
+                -0.5f, -0.5f, -0.5f,
+                0.5f, -0.5f, -0.5f,
+                0.5f, -0.5f, 0.5f,
+                0.5f, -0.5f, 0.5f,
+                -0.5f, -0.5f, 0.5f,
+                -0.5f, -0.5f, -0.5f,
+
+                // right side
+                -0.5f, 0.5f, -0.5f,
+                0.5f, 0.5f, -0.5f,
+                0.5f, 0.5f, 0.5f,
+                0.5f, 0.5f, 0.5f,
+                -0.5f, 0.5f, 0.5f,
+                -0.5f, 0.5f, -0.5f
+        };
+
+        // vertex buffer object
+        unsigned int vbo;
+        glGenVertexArrays(1, &skyboxVAO);
+        glGenBuffers(1, &vbo);
+        glBindVertexArray(skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+
+        // position attribute
+        glVertexAttribPointer(
+                0, // attribute
+                3, // size
+                GL_FLOAT, // type
+                GL_FALSE, // normalized?
+                3 * sizeof(float), // stride
+                (void *) nullptr // array buffer offset
+        );
+        glEnableVertexAttribArray(0);
+    }
+    glDepthFunc(GL_LEQUAL); // set depth function to less than AND equal for skybox depth trick
+
+    glBindVertexArray(skyboxVAO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+
+    glDepthFunc(GL_LESS); // reset depth function to default
+}
+
 /** Function to load 2D texture from file
  *
  * @param path: path to texture
@@ -783,17 +914,14 @@ unsigned int loadTexture(char const *path) {
     unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
     if (data) {
         GLint format = GL_RGB;
-        if (nrComponents == 1)
-            format = GL_RED;
-        else if (nrComponents == 3)
-            format = GL_RGB;
-        else if (nrComponents == 4)
-            format = GL_RGBA;
+        if (nrComponents == 1) format = GL_RED;
+        else if (nrComponents == 3) format = GL_RGB; // JPG image requires GL_RGB
+        else if (nrComponents == 4) format = GL_RGBA; // PNG image requires GL_RGBA
 
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
 
+        glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -804,6 +932,59 @@ unsigned int loadTexture(char const *path) {
         std::cerr << "Texture failed to load at path: " << path << std::endl;
         stbi_image_free(data);
     }
+    return textureID;
+}
+
+/** Function to load cubeMap texture from file
+ *
+ * @param path: path to texture (cubeMap)
+ * @return textureID
+ *
+ */
+unsigned int loadCubeMap(char const **path) {
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrComponents;
+    stbi_set_flip_vertically_on_load(true);
+    for (unsigned int i = 0; i < 6; i++) {
+        unsigned char *data = stbi_load(path[i], &width, &height, &nrComponents, 0);
+        if (data) {
+            GLint format = GL_RGB;
+            if (nrComponents == 1) format = GL_RED;
+            else if (nrComponents == 3) format = GL_RGB; // JPG image requires GL_RGB
+            else if (nrComponents == 4) format = GL_RGBA; // PNG image requires GL_RGBA
+
+            // see more at: https://learnopengl.com/Advanced-OpenGL/Cubemaps
+            glTexImage2D(
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, // target
+                    0, // level
+                    format, // internal format
+                    width, // width
+                    height, // height
+                    0, // border
+                    format, // format
+                    GL_UNSIGNED_BYTE, // type
+                    data // pixels
+            );
+            stbi_image_free(data);
+
+#ifdef _DEBUG
+            std::cout << "CubeMap texture loaded successfully at path: " << path[i] << std::endl;
+#endif
+
+        } else {
+            std::cout << "CubeMap texture failed to load at path: " << path[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
     return textureID;
 }
 

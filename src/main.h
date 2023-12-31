@@ -17,13 +17,17 @@ void scroll_callback(GLFWwindow *window, double x_offset, double y_offset);
 
 void processInput(GLFWwindow *window);
 
-unsigned int loadTexture(const char *path);
+unsigned int loadTexture(char const *path);
+
+unsigned int loadCubeMap(char const **path);
 
 void renderSphere();
 
 void renderOrbit(float radius, unsigned int *VAO);
 
 void renderText(Shader &shader, std::string text, float x, float y, float textScale, glm::vec3 color);
+
+void renderSkybox(unsigned int skyboxTexture);
 
 void bindTexture(unsigned int texture);
 
