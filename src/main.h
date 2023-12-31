@@ -5,7 +5,6 @@
  *
  * @author joelvaz0x01
  * @author BrunoFG1
- * @date 2023-12-14
  *
  */
 
@@ -27,7 +26,7 @@ void renderOrbit(float radius, unsigned int *VAO);
 
 void renderText(Shader &shader, std::string text, float x, float y, float textScale, glm::vec3 color);
 
-void renderSkybox(unsigned int skyboxTexture);
+void renderSkybox(unsigned int skyboxCubeMap);
 
 void bindTexture(unsigned int texture);
 

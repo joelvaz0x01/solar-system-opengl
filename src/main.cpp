@@ -8,10 +8,16 @@
  * - E key: move the camera up
  * - Mouse: look around
  * - Mouse scroll-wheel: zoom in and out
+ * - ESC key: close the window
+ *
+ * Camera modes:
+ * - SPACE key: free camera mode (default)
  * - 0 key: top view camera mode
  * - 1 to 8 keys: focus on a planet (NUMPAD also works)
- * - SPACE key: free camera mode
- * - ESC key: close the window
+ *
+ * Skybox modes:
+ * - F1 key: purple nebula complex skybox (default)
+ * - F2 key: green nebula skybox
  *
  * @author joelvaz0x01
  * @author BrunoFG1
@@ -115,6 +121,8 @@ unsigned int cameraMode = 8; ///< focus planet mode
 
 unsigned int skyboxVAO = 0; ///< vertex array object for skybox
 
+unsigned int skyboxMode = 0; ///< skybox mode
+
 /** Main function that is responsible for the execution of the solar system
  *
  * @return 0 if successful, -1 otherwise
@@ -165,14 +173,14 @@ int main() {
     //load freetype
     FT_Library ft;
     if (FT_Init_FreeType(&ft)) {
-        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        std::cerr << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
         return -1;
     }
 
     //load font
     FT_Face face;
     if (FT_New_Face(ft, "resources/fonts/MPLUSRounded1c-Bold.ttf", 0, &face)) {
-        std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
+        std::cerr << "ERROR::FREETYPE: Failed to load font" << std::endl;
         return -1;
     } else {
         // set size to load glyphs as
@@ -185,7 +193,7 @@ int main() {
         for (GLubyte c = 0; c < 128; c++) {
             // load character glyph
             if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-                std::cout << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
+                std::cerr << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
                 continue;
             }
 
@@ -256,19 +264,32 @@ int main() {
     // load earth's moon texture
     unsigned int moonTexture = loadTexture("resources/textures/planets/moon.jpg");
 
-    // load skybox texture
+    // load skybox textures
     // NOTE: skybox textures must be in square format (same width and height)
     // NOTE: must be in this order: right(+x), left(-x), top(+y), bottom(-y), front(+z), back(-z)
     // see more at: https://learnopengl.com/Advanced-OpenGL/Cubemaps
-    const char *skyboxTextures[] = {
-            "resources/textures/skybox/stars_right.png", // right side (+x)
-            "resources/textures/skybox/stars_left.png", // left side (-x)
-            "resources/textures/skybox/stars_top.png", // top side (+y)
-            "resources/textures/skybox/stars_bottom.png", // bottom side (-y)
-            "resources/textures/skybox/stars_front.png", // front side (+z)
-            "resources/textures/skybox/stars_back.png" // back side (-z)
+
+    // purple nebula complex skybox
+    const char *pNebulaComplex[] = {
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_right.png", // right side (+x)
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_left.png", // left side (-x)
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_top.png", // top side (+y)
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_bottom.png", // bottom side (-y)
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_front.png", // front side (+z)
+            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_back.png", // back side (-z)
     };
-    unsigned int skyboxCubeMap = loadCubeMap(skyboxTextures);
+    unsigned int pNebulaComplexSkybox = loadCubeMap(pNebulaComplex);
+
+    // green nebula skybox
+    const char *gNebula[] = {
+            "resources/textures/skybox/green_nebula/green_nebula_right.png", // right side (+x)
+            "resources/textures/skybox/green_nebula/green_nebula_left.png", // left side (-x)
+            "resources/textures/skybox/green_nebula/green_nebula_top.png", // top side (+y)
+            "resources/textures/skybox/green_nebula/green_nebula_bottom.png", // bottom side (-y)
+            "resources/textures/skybox/green_nebula/green_nebula_front.png", // front side (+z)
+            "resources/textures/skybox/green_nebula/green_nebula_back.png", // back side (-z)
+    };
+    unsigned int gNebulaSkybox = loadCubeMap(gNebula);
 
     // number of planets
     unsigned int planetCount = sizeof(planetTextures) / sizeof(planetTextures[0]);
@@ -452,7 +473,8 @@ int main() {
         skybox.use();
         skybox.setMat4("projection", projection);
         skybox.setMat4("view", glm::mat4(glm::mat3(camera.GetViewMatrix())));
-        renderSkybox(skyboxCubeMap);
+        if (skyboxMode == 0) renderSkybox(pNebulaComplexSkybox);
+        else renderSkybox(gNebulaSkybox);
 
         // swap buffers and poll IO events
         glfwSwapBuffers(window);
@@ -474,7 +496,8 @@ int main() {
         glDeleteTextures(1, &planetTexture);
     }
     glDeleteTextures(1, &moonTexture);
-    glDeleteTextures(1, &skyboxCubeMap);
+    glDeleteTextures(1, &gNebulaSkybox);
+    glDeleteTextures(1, &pNebulaComplexSkybox);
 
     delete[] planetModel;
 
@@ -497,6 +520,7 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(UPWARD, (float) deltaTime);
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(DOWNWARD, (float) deltaTime);
 
+    // change camera mode
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) { // reset camera position to free camera mode
         camera = freeCamera;
         cameraMode = 8;
@@ -519,6 +543,10 @@ void processInput(GLFWwindow *window) {
         cameraMode = 7; // neptune camera mode
     if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_0) == GLFW_PRESS)
         cameraMode = 9; // top view camera mode
+
+    // change skybox mode
+    if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) skyboxMode = 0; // green nebula skybox
+    if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS) skyboxMode = 1; // purple nebula complex skybox
 }
 
 /** Function to resize window size if changed (by OS or user resize)
@@ -813,11 +841,10 @@ void renderText(Shader &shader, std::string text, float x, float y, float scale,
 
 /** Function to render skybox
  *
- * @param skyboxVertices: skybox vertices
- * @param skyboxTexture: skybox texture
+ * @param skyboxCubeMap: skybox cube map
  *
  */
-void renderSkybox(unsigned int skyboxTexture) {
+void renderSkybox(unsigned int skyboxCubeMap) {
     if (skyboxVAO == 0) { // first time initializing the skybox
         float skyboxVertices[] = { // cube to render skybox
                 // bottom side
@@ -892,7 +919,7 @@ void renderSkybox(unsigned int skyboxTexture) {
 
     glBindVertexArray(skyboxVAO);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxCubeMap);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
 
@@ -975,7 +1002,7 @@ unsigned int loadCubeMap(char const **path) {
 #endif
 
         } else {
-            std::cout << "CubeMap texture failed to load at path: " << path[i] << std::endl;
+            std::cerr << "CubeMap texture failed to load at path: " << path[i] << std::endl;
             stbi_image_free(data);
         }
     }
@@ -1021,7 +1048,7 @@ glm::mat4 planetCreator(float translation, float distance, float rotation, float
  *
  * @param scale: scale of char height
  * @param isMaxHeight: check if the character is at the top of the screen
- * @return scaled char height
+ * @return scaled character height
  *
  */
 float charHeightScaled(float scale, bool isMaxHeight) {
@@ -1039,7 +1066,7 @@ float charHeightScaled(float scale, bool isMaxHeight) {
  * @param scale: scale of char width
  * @param textLength: length of the text
  * @param isMaxWidth: check if the character is at the right of the screen
- * @return scaled char width
+ * @return scaled character width
  *
  */
 float charWidthScaled(float scale, std::basic_string<char>::size_type textLength, bool isMaxWidth) {
