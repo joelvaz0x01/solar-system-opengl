@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
 project(solar_system VERSION 1.0)
 
+# set OpenGL policy to prefer GLVND libraries
+if(POLICY CMP0072)
+    cmake_policy(SET CMP0072 NEW)
+endif()
+
 # set output directory to ${CMAKE_SOURCE_DIR}/bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
