@@ -37,7 +37,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
 cmake --build build --config Release
 
 # Run application
-./bin/Release/solar_system_opengl.out.exe
+cd ./bin/Release
+./solar_system.out.exe
 ```
 
 ## 🎮 Controls

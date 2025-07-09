@@ -1,6 +1,4 @@
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)  # Temporary fix for CMake 3.5 compatibility
-
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(solar_system VERSION 1.0)
 
 # set output directory to ${CMAKE_SOURCE_DIR}/bin
