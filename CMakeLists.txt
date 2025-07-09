@@ -1,3 +1,5 @@
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)  # Temporary fix for CMake 3.5 compatibility
+
 cmake_minimum_required(VERSION 3.5)
 project(solar_system VERSION 1.0)
 
