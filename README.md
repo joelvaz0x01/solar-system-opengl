@@ -26,7 +26,7 @@ If CMake won't work on Linux and macOS, probably you will need to install some d
 
 ```bash
 # Clone repository
-git clone --recursive https://github.com/yourusername/solar-system-opengl.git
+git clone --recursive https://github.com/joelvaz0x01/solar-system-opengl.git
 
 # Change to project directory
 cd solar-system-opengl
