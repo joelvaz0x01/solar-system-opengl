@@ -17,7 +17,7 @@ jobs:
         build_type: [Release, Debug]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: "joelvaz0x01/solar-system-opengl"
           submodules: true
@@ -63,7 +63,7 @@ jobs:
           zip -r ../solar-system-linux-wayland-${{ matrix.build_type }}.zip .
 
       - name: Upload Linux Wayland artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: solar-system-linux-wayland-${{ matrix.build_type }}
           path: solar-system-linux-wayland-${{ matrix.build_type }}.zip
