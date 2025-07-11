@@ -24,10 +24,12 @@ set(SOLAR_SYSTEM solar_system.out)
 
 add_subdirectory(include)
 
-if(APPLE)
-    find_package(Freetype REQUIRED)
-    message(STATUS "Found Freetype in ${FREETYPE_INCLUDE_DIRS}")
-endif(APPLE)
+# find fontconfig on Linux systems
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
+    message(STATUS "Found Fontconfig: ${FONTCONFIG_LIBRARIES}")
+endif()
 
 include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/glfw/include
@@ -44,6 +46,11 @@ set(ALL_LIBS
         GLAD
         freetype
 )
+
+# add fontconfig on Linux systems
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND ALL_LIBS ${FONTCONFIG_LIBRARIES})
+endif()
 
 file(GLOB SHADERS
         "src/shaders/*.glsl"

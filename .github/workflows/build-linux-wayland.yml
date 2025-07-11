@@ -23,7 +23,7 @@ jobs:
         run: sudo apt update
 
       - name: Install OpenGL libraries
-        run: sudo apt install libegl1-mesa-dev
+        run: sudo apt install libegl1-mesa-dev libfontconfig1-dev
 
       - name: Install Wayland libraries
         run: sudo apt install libwayland-dev libwayland-cursor0 libwayland-egl1-mesa libxkbcommon-dev
