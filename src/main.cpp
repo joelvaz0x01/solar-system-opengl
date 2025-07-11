@@ -139,6 +139,14 @@ unsigned int skyboxMode = 0; ///< skybox mode
  *
  */
 int main() {
+#ifdef __linux__
+    // initialize Fontconfig
+    if (!FcInit()) {
+        std::cerr << "ERROR::FONTCONFIG: Could not init Fontconfig Library" << std::endl;
+        return -1;
+    }
+#endif
+
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -179,14 +187,6 @@ int main() {
     Shader orbit(getResourcePath("shaders/orbitVertex.glsl").c_str(), getResourcePath("shaders/orbitFragment.glsl").c_str());
     Shader text(getResourcePath("shaders/textVertex.glsl").c_str(), getResourcePath("shaders/textFragment.glsl").c_str());
     Shader skybox(getResourcePath("shaders/skyboxVertex.glsl").c_str(), getResourcePath("shaders/skyboxFragment.glsl").c_str());
-
-    // initialize Fontconfig before using FreeType
-    #ifdef __linux__
-    if (!FcInit()) {
-        std::cerr << "ERROR::FONTCONFIG: Could not initialize Fontconfig" << std::endl;
-        // Continue execution as this is not critical
-    }
-    #endif
 
     // load freetype
     FT_Library ft;
@@ -530,10 +530,10 @@ int main() {
 
     delete[] planetModel;
 
-    // cleanup Fontconfig on Linux
-    #ifdef __linux__
+#ifdef __linux__
+    // cleanup Fontconfig
     FcFini();
-    #endif
+#endif
 
     glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
@@ -979,8 +979,8 @@ std::string getResourcePath(const std::string& relativePath) {
         free(resourcePath);
         return fullPath;
     }
-    
-    // Get executable path on Windows
+
+    // get executable path on Windows
     char exePath[MAX_PATH];
     DWORD result = GetModuleFileNameA(NULL, exePath, MAX_PATH);
     if (result > 0) {
@@ -988,7 +988,7 @@ std::string getResourcePath(const std::string& relativePath) {
         size_t lastSlash = executablePath.find_last_of("\\");
         if (lastSlash != std::string::npos) {
             std::string executableDir = executablePath.substr(0, lastSlash);
-            // Check if this is a shader path (special case for Windows build)
+            // check if this is a shader path (special case for Windows build)
             if (relativePath.find("shaders/") == 0) {
                 return executableDir + "\\" + relativePath;
             } else {
@@ -1003,8 +1003,8 @@ std::string getResourcePath(const std::string& relativePath) {
         std::string fullPath = std::string(resourcePath) + "/" + relativePath;
         return fullPath;
     }
-    
-    // Get executable path on Unix/Linux
+
+    // get executable path on Unix/Linux
     char exePath[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
     if (len != -1) {
@@ -1013,11 +1013,16 @@ std::string getResourcePath(const std::string& relativePath) {
         size_t lastSlash = executablePath.find_last_of("/");
         if (lastSlash != std::string::npos) {
             std::string executableDir = executablePath.substr(0, lastSlash);
-            return executableDir + "/resources/" + relativePath;
+            // Check if this is a shader path (special case for Linux build)
+            if (relativePath.find("shaders/") == 0) {
+                return executableDir + "/" + relativePath;
+            } else {
+                return executableDir + "/resources/" + relativePath;
+            }
         }
     }
 #endif
-    
+
     // Fallback: use relative path from current directory
     return "resources/" + relativePath;
 }
