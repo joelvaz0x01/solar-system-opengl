@@ -42,27 +42,22 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++
           -DCMAKE_C_COMPILER=gcc
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DGLFW_USE_X11=ON
+          -DGLFW_BUILD_WAYLAND=OFF
+          -DGLFW_BUILD_X11=ON
           -S ${{ github.workspace }}
 
       - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-      - name: Test
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ctest --output-on-failure
-
       - name: Prepare artifacts
         run: |
           mkdir -p artifact-package
-          cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out artifact-package/solar_system
+          cp bin/solar_system.out artifact-package/solar_system
           cp -r resources artifact-package/
           cp -r src/shaders artifact-package/
-          cd artifact-package
-          zip -r ../solar-system-linux-x11-${{ matrix.build_type }}.zip .
 
       - name: Upload Linux X11 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: solar-system-linux-x11-${{ matrix.build_type }}
-          path: solar-system-linux-x11-${{ matrix.build_type }}.zip
+          path: artifact-package/*

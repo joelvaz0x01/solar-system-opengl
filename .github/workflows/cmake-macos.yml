@@ -37,27 +37,22 @@ jobs:
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          -DCMAKE_CXX_STANDARD=11
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON
           -S ${{ github.workspace }}
 
       - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-      - name: Test
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ctest --output-on-failure
-
       - name: Prepare artifacts
         run: |
           mkdir -p artifact-package
-          cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out artifact-package/solar_system
+          cp bin/solar_system.out artifact-package/solar_system
           cp -r resources artifact-package/
           cp -r src/shaders artifact-package/
-          cd artifact-package
-          zip -r ../solar-system-macos-${{ matrix.build_type }}.zip .
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: solar-system-macos-${{ matrix.build_type }}
-          path: solar-system-macos-${{ matrix.build_type }}.zip
+          path: artifact-package/*

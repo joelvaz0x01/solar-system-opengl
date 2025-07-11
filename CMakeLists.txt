@@ -11,6 +11,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
 find_package(OpenGL REQUIRED)
 
+# makeLink function for macOS builds
+function(makeLink src dest target)
+    add_custom_command(
+        TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink ${src} ${dest}
+        COMMENT "Creating symbolic link from ${src} to ${dest}"
+    )
+endfunction()
+
 set(SOLAR_SYSTEM solar_system.out)
 
 add_subdirectory(include)
