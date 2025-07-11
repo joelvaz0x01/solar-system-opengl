@@ -180,20 +180,20 @@ int main() {
     Shader text(getResourcePath("shaders/textVertex.glsl").c_str(), getResourcePath("shaders/textFragment.glsl").c_str());
     Shader skybox(getResourcePath("shaders/skyboxVertex.glsl").c_str(), getResourcePath("shaders/skyboxFragment.glsl").c_str());
 
-    // load freetype
-    FT_Library ft;
-    if (FT_Init_FreeType(&ft)) {
-        std::cerr << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
-        return -1;
-    }
-
-    // initialize Fontconfig on Linux
+    // initialize Fontconfig before using FreeType
     #ifdef __linux__
     if (!FcInit()) {
         std::cerr << "ERROR::FONTCONFIG: Could not initialize Fontconfig" << std::endl;
         // Continue execution as this is not critical
     }
     #endif
+
+    // load freetype
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft)) {
+        std::cerr << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        return -1;
+    }
 
     // load font
     FT_Face face;
@@ -253,11 +253,6 @@ int main() {
     // destroy FreeType once we're finished
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
-
-    // cleanup Fontconfig on Linux
-    #ifdef __linux__
-    FcFini();
-    #endif
 
     // configure textVAO/textVBO for texture quads
     glGenVertexArrays(1, &textVAO);
@@ -534,6 +529,11 @@ int main() {
     glDeleteTextures(1, &pNebulaComplexSkybox);
 
     delete[] planetModel;
+
+    // cleanup Fontconfig on Linux
+    #ifdef __linux__
+    FcFini();
+    #endif
 
     glfwTerminate(); // clear all previously allocated GLFW resources
     return 0;
