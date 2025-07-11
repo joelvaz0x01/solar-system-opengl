@@ -1,4 +1,4 @@
-name: CMake Windows Build
+name: Release build for Windows
 
 on:
   push:
@@ -12,11 +12,6 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        build_type: [Release, Debug]
 
     steps:
       - uses: actions/checkout@v4
@@ -37,21 +32,21 @@ jobs:
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_CXX_COMPILER=cl
           -DCMAKE_C_COMPILER=cl
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_BUILD_TYPE=Release
           -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p artifact-package
-          cp bin/${{ matrix.build_type }}/solar_system.out.exe artifact-package/solar_system.exe
+          cp bin/Release/solar_system.out.exe artifact-package/solar_system.exe
           cp -r resources artifact-package/
           cp -r src/shaders artifact-package/
           cd artifact-package
-          7z a ../solar-system-windows-${{ matrix.build_type }}.zip .
+          7z a ../solar-system-windows.zip .
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -61,4 +56,4 @@ jobs:
           name: Solar System v${{ steps.strings.outputs.project-version }}
           draft: false
           prerelease: false
-          files: solar-system-windows-${{ matrix.build_type }}.zip
+          files: solar-system-windows.zip

@@ -35,6 +35,7 @@
 cmake-*/
 build/
 bin/
+out/
 
 # Ignore IDEs generated files
 .idea/

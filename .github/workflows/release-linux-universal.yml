@@ -1,0 +1,167 @@
+name: Release universal AppImage for Linux
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-universal-appimage:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: "joelvaz0x01/solar-system-opengl"
+          submodules: true
+
+      - name: Update repositories
+        run: sudo apt update
+
+      - name: Install common OpenGL dependencies
+        run: |
+          sudo apt install -y \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev
+
+      - name: Install Wayland dependencies
+        run: |
+          sudo apt install -y \
+            libwayland-dev \
+            libwayland-cursor0 \
+            libwayland-egl1-mesa \
+            libxkbcommon-dev
+
+      - name: Install X11 dependencies
+        run: |
+          sudo apt install -y \
+            libx11-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxcursor-dev
+
+      - name: Install AppImage tools
+        run: |
+          wget -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${{ github.workspace }}/build-universal" >> "$GITHUB_OUTPUT"
+          PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake with both X11 and Wayland support
+        run: |
+          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGLFW_BUILD_WAYLAND=ON \
+            -DGLFW_BUILD_X11=ON \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
+
+      - name: Prepare Universal AppDir structure
+        run: |
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p AppDir/usr/share/solar-system
+          
+          # Copy binary
+          if [ -f "bin/solar_system.out" ]; then
+            cp bin/solar_system.out AppDir/usr/bin/solar_system
+          elif [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out" ]; then
+            cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out AppDir/usr/bin/solar_system
+          else
+            echo "Binary not found"
+            exit 1
+          fi
+          
+          chmod +x AppDir/usr/bin/solar_system
+          
+          # Copy resources and shaders
+          cp -r resources/* AppDir/usr/share/solar-system/
+          cp -r src/shaders AppDir/usr/share/solar-system/
+          
+          # Copy desktop file from packaging
+          cp packaging/solar-system.desktop AppDir/usr/share/applications/solar-system.desktop
+          
+          # Copy app icon from packaging
+          cp packaging/solar-system.png AppDir/usr/share/icons/hicolor/256x256/apps/solar-system.png
+          
+          # Create smart AppRun script that detects display server
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export PATH="${HERE}/usr/bin:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS}"
+          
+          # Set resource path for the application to find its assets
+          export SOLAR_SYSTEM_RESOURCE_PATH="${HERE}/usr/share/solar-system"
+          
+          # Auto-detect display server and set appropriate environment
+          if [ -n "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
+            echo "Detected Wayland session"
+            export GDK_BACKEND=wayland
+          elif [ -n "$DISPLAY" ]; then
+            echo "Detected X11 session"
+            export GDK_BACKEND=x11
+          else
+            echo "No display server detected, trying X11 first, then Wayland"
+            export GDK_BACKEND=x11
+          fi
+          
+          # Execute the application from its binary location
+          exec "${HERE}/usr/bin/solar_system" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          # Make desktop file executable and create symlinks for AppImage
+          chmod +x AppDir/usr/share/applications/solar-system.desktop
+          ln -sf usr/share/applications/solar-system.desktop AppDir/solar-system.desktop
+          ln -sf usr/share/icons/hicolor/256x256/apps/solar-system.png AppDir/solar-system.png
+
+      - name: Create Universal AppImage
+        run: |
+          # Create AppImage
+          ./linuxdeploy --appdir AppDir --output appimage
+          
+          # Rename the AppImage
+          mv Solar_System*.AppImage solar-system-linux-universal.AppImage || \
+          mv *.AppImage solar-system-linux-universal.AppImage
+
+      - name: Test AppImage
+        run: |
+          # Basic test to ensure the AppImage was created properly
+          if [ -f "solar-system-linux-universal.AppImage" ]; then
+            echo "AppImage created successfully"
+            ls -lh solar-system-linux-universal.AppImage
+            file solar-system-linux-universal.AppImage
+          else
+            echo "AppImage creation failed"
+            exit 1
+          fi
+
+      - name: Upload Universal AppImage to Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          tag_name: v${{ steps.strings.outputs.project-version }}
+          name: Solar System v${{ steps.strings.outputs.project-version }}
+          draft: false
+          prerelease: false
+          files: solar-system-linux-universal.AppImage

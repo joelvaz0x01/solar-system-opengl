@@ -1,5 +1,4 @@
-# CMake workflow for Linux development with Wayland
-name: CMake Linux Wayland Build
+name: Build on Linux (only Wayland)
 
 on:
   push:
@@ -13,11 +12,6 @@ permissions:
 jobs:
   build-linux-wayland:
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        build_type: [Release, Debug]
 
     steps:
       - uses: actions/checkout@v4
@@ -47,29 +41,10 @@ jobs:
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_CXX_COMPILER=g++
           -DCMAKE_C_COMPILER=gcc
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_BUILD_TYPE=Release
           -DGLFW_BUILD_WAYLAND=ON
           -DGLFW_BUILD_X11=OFF
           -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-
-      - name: Prepare artifacts
-        run: |
-          mkdir -p artifact-package
-          cp bin/solar_system.out artifact-package/solar_system
-          cp -r resources artifact-package/
-          cp -r src/shaders artifact-package/
-          cd artifact-package
-          zip -r ../solar-system-linux-wayland-${{ matrix.build_type }}.zip .
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        with:
-          tag_name: v${{ steps.strings.outputs.project-version }}
-          name: Solar System v${{ steps.strings.outputs.project-version }}
-          draft: false
-          prerelease: false
-          files: solar-system-linux-wayland-${{ matrix.build_type }}.zip
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release

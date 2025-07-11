@@ -1,0 +1,148 @@
+name: Release ARM64 build for macOS
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: "joelvaz0x01/solar-system-opengl"
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${{ github.workspace }}/build-macos" >> "$GITHUB_OUTPUT"
+          PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake for macOS ARM64
+        run: >
+          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_STANDARD=11
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON
+          -DCMAKE_OSX_ARCHITECTURES="arm64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          -S ${{ github.workspace }}
+
+      - name: Build ARM64 Binary
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
+
+      - name: Create macOS Application Bundle
+        run: |
+          # Create the app bundle structure
+          mkdir -p "Solar System.app/Contents/MacOS"
+          mkdir -p "Solar System.app/Contents/Resources"
+          
+          # Copy the universal binary
+          cp bin/solar_system.out "Solar System.app/Contents/MacOS/Solar System"
+          chmod +x "Solar System.app/Contents/MacOS/Solar System"
+          
+          # Copy resources and shaders
+          cp -r resources/* "Solar System.app/Contents/Resources/"
+          cp -r src/shaders "Solar System.app/Contents/Resources/"
+          
+          # Copy app icon from packaging and convert to .icns format
+          mkdir -p "Solar System.iconset"
+          cp packaging/solar-system.png "Solar System.iconset/icon_512x512.png"
+          
+          # Create .icns file from iconset (if iconutil is available)
+          if command -v iconutil >/dev/null 2>&1; then
+            iconutil -c icns "Solar System.iconset" -o "Solar System.app/Contents/Resources/Solar System.icns"
+            ICON_KEY='<key>CFBundleIconFile</key><string>Solar System</string>'
+          else
+            # Fallback: just copy the PNG as app icon
+            cp packaging/solar-system.png "Solar System.app/Contents/Resources/Solar System.png"
+            ICON_KEY='<key>CFBundleIconFile</key><string>Solar System.png</string>'
+          fi
+          
+          # Clean up temporary iconset
+          rm -rf "Solar System.iconset"
+          
+          # Copy and customize Info.plist from packaging folder
+          cp packaging/Info.plist "Solar System.app/Contents/Info.plist"
+          
+          # Replace version placeholder
+          sed -i '' "s/{{VERSION}}/${{ steps.strings.outputs.project-version }}/g" "Solar System.app/Contents/Info.plist"
+          
+          # Replace icon name placeholder
+          if command -v iconutil >/dev/null 2>&1; then
+            ICON_NAME="Solar System"
+          else
+            ICON_NAME="Solar System.png"
+          fi
+          sed -i '' "s/{{ICON_NAME}}/$ICON_NAME/g" "Solar System.app/Contents/Info.plist"
+          
+          # Verify the bundle structure
+          echo "App bundle created:"
+          ls -la "Solar System.app/Contents/"
+          echo "Binary architecture:"
+          file "Solar System.app/Contents/MacOS/Solar System"
+          lipo -info "Solar System.app/Contents/MacOS/Solar System" || echo "Single architecture binary"
+
+      - name: Create DMG Package
+        run: |
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg-contents
+          cp -R "Solar System.app" dmg-contents/
+          
+          # Create a symbolic link to Applications folder
+          ln -s /Applications dmg-contents/Applications
+          
+          # Create the DMG
+          hdiutil create -volname "Solar System" \
+            -srcfolder dmg-contents \
+            -ov -format UDZO \
+            solar-system-macos-arm64.dmg
+          
+          echo "DMG created successfully:"
+          ls -lh solar-system-macos-arm64.dmg
+
+      - name: Test Application Bundle
+        run: |
+          # Basic test to ensure the app bundle was created properly
+          if [ -d "Solar System.app" ]; then
+            echo "App bundle created successfully"
+            echo "Bundle structure:"
+            find "Solar System.app" -type f | head -10
+            
+            echo "Binary info:"
+            file "Solar System.app/Contents/MacOS/Solar System"
+            
+            # Test if it's a universal binary
+            if lipo -info "Solar System.app/Contents/MacOS/Solar System" 2>/dev/null | grep -q "arm64"; then
+              echo "ARM64 binary created successfully"
+            else
+              echo "Binary architecture not detected correctly"
+            fi
+          else
+            echo "App bundle creation failed"
+            exit 1
+          fi
+
+      - name: Upload ARM64 DMG to Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          tag_name: v${{ steps.strings.outputs.project-version }}
+          name: Solar System v${{ steps.strings.outputs.project-version }}
+          draft: false
+          prerelease: false
+          files: solar-system-macos-arm64.dmg
