@@ -35,7 +35,9 @@ jobs:
             libwayland-dev \
             libwayland-cursor0 \
             libwayland-egl1-mesa \
-            libxkbcommon-dev
+            libxkbcommon-dev \
+            libdecor-0-dev \
+            libdecor-0-0
 
       - name: Install X11 dependencies
         run: |
@@ -114,16 +116,60 @@ jobs:
           # Set resource path for the application to find its assets
           export SOLAR_SYSTEM_RESOURCE_PATH="${HERE}/usr/share/solar-system"
           
-          # Auto-detect display server and set appropriate environment
-          if [ -n "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
-            echo "Detected Wayland session"
+          # Improved display server detection
+          WAYLAND_DETECTED=false
+          X11_DETECTED=false
+          
+          # Check for Wayland
+          if [ -n "$WAYLAND_DISPLAY" ] || [ -n "$XDG_SESSION_TYPE" ] && [ "$XDG_SESSION_TYPE" = "wayland" ] || pgrep -x "gnome-shell" > /dev/null 2>&1 || pgrep -x "kwin_wayland" > /dev/null 2>&1; then
+            WAYLAND_DETECTED=true
+          fi
+          
+          # Check for X11
+          if [ -n "$DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "x11" ]; then
+            X11_DETECTED=true
+          fi
+          
+          # Set environment based on detection
+          if [ "$WAYLAND_DETECTED" = true ] && [ "$X11_DETECTED" = false ]; then
+            echo "Detected pure Wayland session"
             export GDK_BACKEND=wayland
-          elif [ -n "$DISPLAY" ]; then
-            echo "Detected X11 session"
+            export QT_QPA_PLATFORM=wayland
+            export SDL_VIDEODRIVER=wayland
+            export CLUTTER_BACKEND=wayland
+            export XDG_SESSION_TYPE=wayland
+            # Disable GTK decorations to avoid libdecor issues
+            export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+            export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+            export _JAVA_AWT_WM_NONREPARENTING=1
+          elif [ "$X11_DETECTED" = true ] && [ "$WAYLAND_DETECTED" = false ]; then
+            echo "Detected pure X11 session"
             export GDK_BACKEND=x11
+            export QT_QPA_PLATFORM=xcb
+            export SDL_VIDEODRIVER=x11
+            export XDG_SESSION_TYPE=x11
+          elif [ "$WAYLAND_DETECTED" = true ] && [ "$X11_DETECTED" = true ]; then
+            echo "Detected XWayland session (Wayland with X11 compatibility)"
+            # Prefer native Wayland when both are available
+            if [ -n "$WAYLAND_DISPLAY" ]; then
+              echo "Using native Wayland"
+              export GDK_BACKEND=wayland
+              export QT_QPA_PLATFORM=wayland
+              export SDL_VIDEODRIVER=wayland
+              export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+              export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+            else
+              echo "Falling back to X11"
+              export GDK_BACKEND=x11
+              export QT_QPA_PLATFORM=xcb
+              export SDL_VIDEODRIVER=x11
+            fi
           else
-            echo "No display server detected, trying X11 first, then Wayland"
+            echo "No display server detected, trying X11 as fallback"
             export GDK_BACKEND=x11
+            export QT_QPA_PLATFORM=xcb
+            export SDL_VIDEODRIVER=x11
+            export XDG_SESSION_TYPE=x11
           fi
           
           # Execute the application from its binary location
