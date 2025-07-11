@@ -1,0 +1,63 @@
+# CMake workflow for macOS development
+name: CMake macOS Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: "joelvaz0x01/solar-system-opengl"
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${{ github.workspace }}/build-macos" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake for macOS
+        run: >
+          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+      - name: Test
+        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        run: ctest --output-on-failure
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifact-package
+          cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out artifact-package/solar_system
+          cp -r resources artifact-package/
+          cp -r src/shaders artifact-package/
+          cd artifact-package
+          zip -r ../solar-system-macos-${{ matrix.build_type }}.zip .
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: solar-system-macos-${{ matrix.build_type }}
+          path: solar-system-macos-${{ matrix.build_type }}.zip

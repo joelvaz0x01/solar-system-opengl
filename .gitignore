@@ -39,3 +39,4 @@ bin/
 # Ignore IDEs generated files
 .idea/
 .vscode/
+.vs/
