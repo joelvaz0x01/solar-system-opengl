@@ -16,6 +16,8 @@ void scroll_callback(GLFWwindow *window, double x_offset, double y_offset);
 
 void processInput(GLFWwindow *window);
 
+std::string getResourcePath(const std::string& relativePath);
+
 unsigned int loadTexture(char const *path);
 
 unsigned int loadCubeMap(char const **path);

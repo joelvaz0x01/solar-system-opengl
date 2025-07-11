@@ -26,6 +26,13 @@
 
 #include <iostream>
 #include <map>
+#include <cstdlib>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -56,7 +63,7 @@
 /// planet information
 /// see more at: https://science.nasa.gov/solar-system/planets/
 /// and at: https://nssdc.gsfc.nasa.gov/planetary/factsheet/
-planetInfo planetInfo[] = {
+planetInfo planetsData[] = {
         {"Mercury", "0.4 astronomical units",  "2,440 km",  "0 moons",   "59 Earth days",    "88 Earth days"},
         {"Venus",   "0.72 astronomical units", "6,051 km",  "0 moons",   "243 Earth days",   "225 Earth days"},
         {"Earth",   "1.0 astronomical unit",   "6,378 km",  "1 moon",    "1 Earth day",      "365 Earth days"},
@@ -164,11 +171,11 @@ int main() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // compile shaders
-    Shader planet("shaders/planetVertex.glsl", "shaders/planetFragment.glsl");
-    Shader sun("shaders/sunVertex.glsl", "shaders/sunFragment.glsl");
-    Shader orbit("shaders/orbitVertex.glsl", "shaders/orbitFragment.glsl");
-    Shader text("shaders/textVertex.glsl", "shaders/textFragment.glsl");
-    Shader skybox("shaders/skyboxVertex.glsl", "shaders/skyboxFragment.glsl");
+    Shader planet(getResourcePath("shaders/planetVertex.glsl").c_str(), getResourcePath("shaders/planetFragment.glsl").c_str());
+    Shader sun(getResourcePath("shaders/sunVertex.glsl").c_str(), getResourcePath("shaders/sunFragment.glsl").c_str());
+    Shader orbit(getResourcePath("shaders/orbitVertex.glsl").c_str(), getResourcePath("shaders/orbitFragment.glsl").c_str());
+    Shader text(getResourcePath("shaders/textVertex.glsl").c_str(), getResourcePath("shaders/textFragment.glsl").c_str());
+    Shader skybox(getResourcePath("shaders/skyboxVertex.glsl").c_str(), getResourcePath("shaders/skyboxFragment.glsl").c_str());
 
     //load freetype
     FT_Library ft;
@@ -179,7 +186,8 @@ int main() {
 
     //load font
     FT_Face face;
-    if (FT_New_Face(ft, "resources/fonts/MPLUSRounded1c-Bold.ttf", 0, &face)) {
+    std::string fontPath = getResourcePath("fonts/MPLUSRounded1c-Bold.ttf");
+    if (FT_New_Face(ft, fontPath.c_str(), 0, &face)) {
         std::cerr << "ERROR::FREETYPE: Failed to load font" << std::endl;
         return -1;
     } else {
@@ -247,22 +255,22 @@ int main() {
     glBindVertexArray(0);
 
     // load planet textures
-    unsigned int sunTexture = loadTexture("resources/textures/planets/sun.jpg");
+    unsigned int sunTexture = loadTexture(getResourcePath("textures/planets/sun.jpg").c_str());
 
     // load planet textures
     unsigned int planetTextures[] = {
-            loadTexture("resources/textures/planets/mercury.jpg"),
-            loadTexture("resources/textures/planets/venus.jpg"),
-            loadTexture("resources/textures/planets/earth.jpg"),
-            loadTexture("resources/textures/planets/mars.jpg"),
-            loadTexture("resources/textures/planets/jupiter.jpg"),
-            loadTexture("resources/textures/planets/saturn.jpg"),
-            loadTexture("resources/textures/planets/uranus.jpg"),
-            loadTexture("resources/textures/planets/neptune.jpg")
+            loadTexture(getResourcePath("textures/planets/mercury.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/venus.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/earth.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/mars.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/jupiter.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/saturn.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/uranus.jpg").c_str()),
+            loadTexture(getResourcePath("textures/planets/neptune.jpg").c_str())
     };
 
     // load earth's moon texture
-    unsigned int moonTexture = loadTexture("resources/textures/planets/moon.jpg");
+    unsigned int moonTexture = loadTexture(getResourcePath("textures/planets/moon.jpg").c_str());
 
     // load skybox textures
     // NOTE: skybox textures must be in square format (same width and height)
@@ -270,25 +278,35 @@ int main() {
     // see more at: https://learnopengl.com/Advanced-OpenGL/Cubemaps
 
     // purple nebula complex skybox
-    const char *pNebulaComplex[] = {
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_right.png", // right side (+x)
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_left.png", // left side (-x)
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_top.png", // top side (+y)
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_bottom.png", // bottom side (-y)
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_front.png", // front side (+z)
-            "resources/textures/skybox/purple_nebula_complex/purple_nebula_complex_back.png", // back side (-z)
+    std::string pNebulaComplexPaths[6] = {
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_right.png"), // right side (+x)
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_left.png"), // left side (-x)
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_top.png"), // top side (+y)
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_bottom.png"), // bottom side (-y)
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_front.png"), // front side (+z)
+            getResourcePath("textures/skybox/purple_nebula_complex/purple_nebula_complex_back.png"), // back side (-z)
     };
+    
+    const char *pNebulaComplex[6];
+    for (int i = 0; i < 6; i++) {
+        pNebulaComplex[i] = pNebulaComplexPaths[i].c_str();
+    }
     unsigned int pNebulaComplexSkybox = loadCubeMap(pNebulaComplex);
 
     // green nebula skybox
-    const char *gNebula[] = {
-            "resources/textures/skybox/green_nebula/green_nebula_right.png", // right side (+x)
-            "resources/textures/skybox/green_nebula/green_nebula_left.png", // left side (-x)
-            "resources/textures/skybox/green_nebula/green_nebula_top.png", // top side (+y)
-            "resources/textures/skybox/green_nebula/green_nebula_bottom.png", // bottom side (-y)
-            "resources/textures/skybox/green_nebula/green_nebula_front.png", // front side (+z)
-            "resources/textures/skybox/green_nebula/green_nebula_back.png", // back side (-z)
+    std::string gNebulaPaths[6] = {
+            getResourcePath("textures/skybox/green_nebula/green_nebula_right.png"), // right side (+x)
+            getResourcePath("textures/skybox/green_nebula/green_nebula_left.png"), // left side (-x)
+            getResourcePath("textures/skybox/green_nebula/green_nebula_top.png"), // top side (+y)
+            getResourcePath("textures/skybox/green_nebula/green_nebula_bottom.png"), // bottom side (-y)
+            getResourcePath("textures/skybox/green_nebula/green_nebula_front.png"), // front side (+z)
+            getResourcePath("textures/skybox/green_nebula/green_nebula_back.png"), // back side (-z)
     };
+    
+    const char *gNebula[6];
+    for (int i = 0; i < 6; i++) {
+        gNebula[i] = gNebulaPaths[i].c_str();
+    }
     unsigned int gNebulaSkybox = loadCubeMap(gNebula);
 
     // number of planets
@@ -407,7 +425,7 @@ int main() {
             orbit.setMat4("model", orbitModel);
             renderOrbit(planetProp[i].distance, &orbitVAO[i]);
 
-            if (planetInfo[i].name == "Earth") {
+            if (planetsData[i].name == "Earth") {
                 // render moon
                 glm::mat4 moonModel = planetCreator(
                         moonProp.translation, // translation around the earth (translation velocity)
@@ -926,7 +944,70 @@ void renderSkybox(unsigned int skyboxCubeMap) {
     glDepthFunc(GL_LESS); // reset depth function to default
 }
 
-/** Function to load 2D texture from file
+/**
+ * @brief Get the full path to a resource file, supporting AppImage deployment
+ * @details This function checks for the SOLAR_SYSTEM_RESOURCE_PATH environment variable
+ * which is set by the AppImage wrapper script. If not found, it looks for resources 
+ * relative to the executable's location.
+ *
+ * @param relativePath: relative path to the resource (e.g., "textures/sun.jpg")
+ * @return full path to the resource
+ */
+std::string getResourcePath(const std::string& relativePath) {
+#ifdef _WIN32
+    // Windows: use _dupenv_s for safety
+    char* resourcePath = nullptr;
+    size_t len = 0;
+    if (_dupenv_s(&resourcePath, &len, "SOLAR_SYSTEM_RESOURCE_PATH") == 0 && resourcePath != nullptr) {
+        std::string fullPath = std::string(resourcePath) + "/" + relativePath;
+        free(resourcePath);
+        return fullPath;
+    }
+    
+    // Get executable path on Windows
+    char exePath[MAX_PATH];
+    DWORD result = GetModuleFileNameA(NULL, exePath, MAX_PATH);
+    if (result > 0) {
+        std::string executablePath(exePath);
+        size_t lastSlash = executablePath.find_last_of("\\");
+        if (lastSlash != std::string::npos) {
+            std::string executableDir = executablePath.substr(0, lastSlash);
+            // Check if this is a shader path (special case for Windows build)
+            if (relativePath.find("shaders/") == 0) {
+                return executableDir + "\\" + relativePath;
+            } else {
+                return executableDir + "\\resources\\" + relativePath;
+            }
+        }
+    }
+#else
+    // Unix/Linux: use getenv
+    const char* resourcePath = std::getenv("SOLAR_SYSTEM_RESOURCE_PATH");
+    if (resourcePath != nullptr) {
+        std::string fullPath = std::string(resourcePath) + "/" + relativePath;
+        return fullPath;
+    }
+    
+    // Get executable path on Unix/Linux
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len != -1) {
+        exePath[len] = '\0';
+        std::string executablePath(exePath);
+        size_t lastSlash = executablePath.find_last_of("/");
+        if (lastSlash != std::string::npos) {
+            std::string executableDir = executablePath.substr(0, lastSlash);
+            return executableDir + "/resources/" + relativePath;
+        }
+    }
+#endif
+    
+    // Fallback: use relative path from current directory
+    return "resources/" + relativePath;
+}
+
+/**
+ * @brief Loads the texture and assign it to textureID
  *
  * @param path: path to texture
  * @return textureID
@@ -1088,12 +1169,12 @@ float charWidthScaled(float scale, std::basic_string<char>::size_type textLength
  */
 void showPlanetInfo(Shader &shader, unsigned int planetIndex, glm::vec3 textColor, float textScale) {
     std::string planetInfoText[] = {
-            "Name: " + planetInfo[planetIndex].name,
-            "Distance: " + planetInfo[planetIndex].distance,
-            "Radius: " + planetInfo[planetIndex].radius,
-            "Moons number: " + planetInfo[planetIndex].moons,
-            "Rotation duration: " + planetInfo[planetIndex].rotationPeriod,
-            "Translation duration: " + planetInfo[planetIndex].orbitalPeriod,
+            "Name: " + planetsData[planetIndex].name,
+            "Distance: " + planetsData[planetIndex].distance,
+            "Radius: " + planetsData[planetIndex].radius,
+            "Moons number: " + planetsData[planetIndex].moons,
+            "Rotation duration: " + planetsData[planetIndex].rotationPeriod,
+            "Translation duration: " + planetsData[planetIndex].orbitalPeriod,
     };
 
     int planetInfoTextSize = sizeof(planetInfoText) / sizeof(planetInfoText[0]);
