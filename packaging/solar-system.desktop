@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Solar System
+Comment=3D Solar System Simulation
+Exec=solar_system
+Icon=solar-system
+Categories=Education;Science;Graphics;
+StartupNotify=true
+Terminal=false
