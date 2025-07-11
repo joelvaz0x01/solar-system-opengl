@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: write
+
 jobs:
   build-linux-x11:
     runs-on: ubuntu-latest
@@ -35,6 +38,8 @@ jobs:
         shell: bash
         run: |
           echo "build-output-dir=${{ github.workspace }}/build-x11" >> "$GITHUB_OUTPUT"
+          PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Configure CMake for X11
         run: >
@@ -55,9 +60,15 @@ jobs:
           cp bin/solar_system.out artifact-package/solar_system
           cp -r resources artifact-package/
           cp -r src/shaders artifact-package/
+          cd artifact-package
+          zip -r ../solar-system-linux-x11-${{ matrix.build_type }}.zip .
 
-      - name: Upload Linux X11 artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          name: solar-system-linux-x11-${{ matrix.build_type }}
-          path: artifact-package/*
+          tag_name: v${{ steps.strings.outputs.project-version }}
+          name: Solar System v${{ steps.strings.outputs.project-version }}
+          draft: false
+          prerelease: false
+          files: solar-system-linux-x11-${{ matrix.build_type }}.zip

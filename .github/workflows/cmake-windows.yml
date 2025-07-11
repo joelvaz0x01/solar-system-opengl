@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -23,9 +26,11 @@ jobs:
 
       - name: Set reusable strings
         id: strings
-        shell: bash
+        shell: pwsh
         run: |
-          echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+          echo "build-output-dir=${{ github.workspace }}/build" >> "$env:GITHUB_OUTPUT"
+          $PROJECT_VERSION = (Select-String -Path "CMakeLists.txt" -Pattern "^project\(solar_system VERSION" | ForEach-Object { $_.Line -replace '.*VERSION ([0-9.]+).*', '$1' })
+          echo "project-version=$PROJECT_VERSION" >> "$env:GITHUB_OUTPUT"
 
       - name: Configure CMake
         run: >
@@ -45,9 +50,15 @@ jobs:
           cp bin/${{ matrix.build_type }}/solar_system.out.exe artifact-package/solar_system.exe
           cp -r resources artifact-package/
           cp -r src/shaders artifact-package/
+          cd artifact-package
+          7z a ../solar-system-windows-${{ matrix.build_type }}.zip .
 
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          name: solar-system-windows-${{ matrix.build_type }}
-          path: artifact-package/*
+          tag_name: v${{ steps.strings.outputs.project-version }}
+          name: Solar System v${{ steps.strings.outputs.project-version }}
+          draft: false
+          prerelease: false
+          files: solar-system-windows-${{ matrix.build_type }}.zip
