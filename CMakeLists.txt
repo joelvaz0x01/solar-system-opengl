@@ -9,7 +9,12 @@ endif()
 # set output directory to ${CMAKE_SOURCE_DIR}/bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
+# find OpenGL package
 find_package(OpenGL REQUIRED)
+if(NOT OpenGL_FOUND)
+    message(FATAL_ERROR "OpenGL not found! Please install OpenGL drivers and development libraries.")
+endif()
+message(STATUS "Found OpenGL: ${OPENGL_LIBRARIES}")
 
 # makeLink function for macOS builds
 function(makeLink src dest target)
@@ -39,7 +44,7 @@ include_directories(
 )
 
 set(ALL_LIBS
-        ${OPENGL_LIBRARY}
+        OpenGL::GL
         glfw
         GLAD
         freetype
