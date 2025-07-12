@@ -39,6 +39,10 @@ endif()
 add_subdirectory(glfw)
 include_directories(glfw/include/GLFW)
 
+# GLAD
+add_library(GLAD "glad/src/gl.c")
+target_include_directories(GLAD PRIVATE "glad/include")
+
 # FreeType
 add_subdirectory(freetype)
 include_directories(freetype/include)
