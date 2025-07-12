@@ -1,4 +1,4 @@
-name: Release ARM64 build for macOS
+name: Release build for macOS
 
 on:
   push:
@@ -10,8 +10,20 @@ permissions:
   contents: write
 
 jobs:
-  build-macos-arm64:
-    runs-on: macos-latest
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+            deployment_target: "11.0"
+            dmg_suffix: arm64
+          - arch: x86_64
+            runner: macos-latest-large
+            deployment_target: "10.15"
+            dmg_suffix: intel
+    
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
@@ -32,17 +44,15 @@ jobs:
           PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
           echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake for macOS ARM64
+      - name: Configure CMake for macOS ${{ matrix.arch }}
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CXX_STANDARD=11
-          -DCMAKE_CXX_STANDARD_REQUIRED=ON
-          -DCMAKE_OSX_ARCHITECTURES="arm64"
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.deployment_target }}
           -S ${{ github.workspace }}
 
-      - name: Build ARM64 Binary
+      - name: Build ${{ matrix.arch }} Binary
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
 
       - name: Create macOS Application Bundle
@@ -110,10 +120,10 @@ jobs:
           hdiutil create -volname "Solar System" \
             -srcfolder dmg-contents \
             -ov -format UDZO \
-            solar-system-macos-arm64.dmg
+            solar-system-macos-${{ matrix.dmg_suffix }}.dmg
           
           echo "DMG created successfully:"
-          ls -lh solar-system-macos-arm64.dmg
+          ls -lh solar-system-macos-${{ matrix.dmg_suffix }}.dmg
 
       - name: Test Application Bundle
         run: |
@@ -126,9 +136,9 @@ jobs:
             echo "Binary info:"
             file "Solar System.app/Contents/MacOS/Solar System"
             
-            # Test if it's a universal binary
-            if lipo -info "Solar System.app/Contents/MacOS/Solar System" 2>/dev/null | grep -q "arm64"; then
-              echo "ARM64 binary created successfully"
+            # Test if it's the correct architecture
+            if lipo -info "Solar System.app/Contents/MacOS/Solar System" 2>/dev/null | grep -q "${{ matrix.arch }}"; then
+              echo "${{ matrix.arch }} binary created successfully"
             else
               echo "Binary architecture not detected correctly"
             fi
@@ -137,7 +147,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload ARM64 DMG to Release
+      - name: Upload ${{ matrix.dmg_suffix }} DMG to Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
@@ -145,4 +155,4 @@ jobs:
           name: Solar System v${{ steps.strings.outputs.project-version }}
           draft: false
           prerelease: false
-          files: solar-system-macos-arm64.dmg
+          files: solar-system-macos-${{ matrix.dmg_suffix }}.dmg

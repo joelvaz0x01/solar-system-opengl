@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(solar_system VERSION 1.0)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # set OpenGL policy to prefer GLVND libraries
 if(POLICY CMP0072)
     cmake_policy(SET CMP0072 NEW)
