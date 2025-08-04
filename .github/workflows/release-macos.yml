@@ -92,6 +92,9 @@ jobs:
           # Replace version placeholder
           sed -i '' "s/{{VERSION}}/${{ steps.strings.outputs.project-version }}/g" "Solar System.app/Contents/Info.plist"
           
+          # Replace deployment target placeholder
+          sed -i '' "s/{{DEPLOYMENT_TARGET}}/${{ matrix.deployment_target }}/g" "Solar System.app/Contents/Info.plist"
+          
           # Replace icon name placeholder
           if command -v iconutil >/dev/null 2>&1; then
             ICON_NAME="Solar System"

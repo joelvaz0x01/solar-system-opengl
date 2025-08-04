@@ -21,7 +21,7 @@
     <key>CFBundleIconFile</key>
     <string>{{ICON_NAME}}</string>
     <key>LSMinimumSystemVersion</key>
-    <string>10.15</string>
+    <string>{{DEPLOYMENT_TARGET}}</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSApplicationCategoryType</key>

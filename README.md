@@ -5,24 +5,17 @@ This project is a simple solar system simulation using OpenGL. It features the S
 ## 📦 Requirements
 - C++ compiler (C++11 or later)
 - OpenGL development libraries
-- GLFW library for window management
-- GLM library for mathematics
-
-
-## 🛠️ Installation
-
-### Prerequisites
-- C++ compiler
 - CMake (version 3.10 or later)
-- OpenGL library
-- Graphic Interface
+- Graphic Interface for GUI
 
-All other dependencies like GLFW, GLM, GLAD, and FreeType will be built automatically using CMake.
 
-### Installation Steps
-The installation steps below worked on Windows.
+## 🛠️ Installation and Setup
+> [!NOTE]
+> macOS was only tested with GitHub Actions, so it may not work on your local machine.
 
-If CMake won't work on Linux and macOS, probably you will need to install some dependencies manually and/or fix the `CMakeLists.txt` file.
+Dependencies like GLFW, GLM, GLAD, and FreeType will be built automatically when running CMake.
+
+The following steps were tested on Windows, but they are similar for Linux and macOS. Make sure you have the required dependencies installed on your system.
 
 ```bash
 # Clone repository
