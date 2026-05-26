@@ -1,0 +1,12 @@
+#ifndef SOLAR_SYSTEM_CONSTANTS_H
+#define SOLAR_SYSTEM_CONSTANTS_H
+
+#define WIDTH  1920
+#define HEIGHT 1080
+
+#define CHAR_WIDTH_UP    27.0f
+#define CHAR_WIDTH_DOWN  25.0f
+#define CHAR_HEIGHT_UP   60.0f
+#define CHAR_HEIGHT_DOWN 25.0f
+
+#endif  // SOLAR_SYSTEM_CONSTANTS_H
