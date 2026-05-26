@@ -3,9 +3,9 @@ This project is a simple solar system simulation using OpenGL. It features the S
 
 
 ## 📦 Requirements
-- C++ compiler (C++11 or later)
+- C++ compiler (with C++17 support)
 - OpenGL development libraries
-- CMake (version 3.10 or later)
+- CMake (version 3.20 or later)
 - Graphic Interface for GUI
 
 
@@ -15,7 +15,7 @@ This project is a simple solar system simulation using OpenGL. It features the S
 
 Dependencies like GLFW, GLM, GLAD, and FreeType will be built automatically when running CMake.
 
-The following steps were tested on Windows, but they are similar for Linux and macOS. Make sure you have the required dependencies installed on your system.
+To build the project, make sure you have the required dependencies installed on your system.
 
 ```bash
 # Clone repository
@@ -28,10 +28,6 @@ mkdir build
 # Build project
 cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
 cmake --build build --config Release
-
-# Run application
-cd ./bin/Release
-./solar_system.out.exe
 ```
 
 ## 🎮 Controls

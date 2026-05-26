@@ -6,12 +6,18 @@ on:
   pull_request:
     branches: ["main"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   build-macos:
+    name: Build macOS (${{ matrix.arch }})
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
@@ -19,16 +25,16 @@ jobs:
             deployment_target: "11.0"
             dmg_suffix: arm64
           - arch: x86_64
-            runner: macos-latest-large
+            runner: macos-13
             deployment_target: "10.15"
             dmg_suffix: intel
-    
+
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          repository: "joelvaz0x01/solar-system-opengl"
           submodules: true
 
       - name: Install dependencies
@@ -44,7 +50,7 @@ jobs:
           PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
           echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake for macOS ${{ matrix.arch }}
+      - name: Configure CMake
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}
           -DCMAKE_BUILD_TYPE=Release
@@ -52,105 +58,63 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.deployment_target }}
           -S ${{ github.workspace }}
 
-      - name: Build ${{ matrix.arch }} Binary
+      - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
 
-      - name: Create macOS Application Bundle
+      - name: Create Application Bundle
         run: |
-          # Create the app bundle structure
-          mkdir -p "Solar System.app/Contents/MacOS"
-          mkdir -p "Solar System.app/Contents/Resources"
-          
-          # Copy the universal binary
-          cp bin/solar_system.out "Solar System.app/Contents/MacOS/Solar System"
-          chmod +x "Solar System.app/Contents/MacOS/Solar System"
-          
-          # Copy resources and shaders
-          cp -r resources/* "Solar System.app/Contents/Resources/"
-          cp -r src/shaders "Solar System.app/Contents/Resources/"
-          
-          # Copy app icon from packaging and convert to .icns format
-          mkdir -p "Solar System.iconset"
-          cp packaging/solar-system.png "Solar System.iconset/icon_512x512.png"
-          
-          # Create .icns file from iconset (if iconutil is available)
-          if command -v iconutil >/dev/null 2>&1; then
-            iconutil -c icns "Solar System.iconset" -o "Solar System.app/Contents/Resources/Solar System.icns"
-            ICON_KEY='<key>CFBundleIconFile</key><string>Solar System</string>'
-          else
-            # Fallback: just copy the PNG as app icon
-            cp packaging/solar-system.png "Solar System.app/Contents/Resources/Solar System.png"
-            ICON_KEY='<key>CFBundleIconFile</key><string>Solar System.png</string>'
-          fi
-          
-          # Clean up temporary iconset
-          rm -rf "Solar System.iconset"
-          
-          # Copy and customize Info.plist from packaging folder
-          cp packaging/Info.plist "Solar System.app/Contents/Info.plist"
-          
-          # Replace version placeholder
-          sed -i '' "s/{{VERSION}}/${{ steps.strings.outputs.project-version }}/g" "Solar System.app/Contents/Info.plist"
-          
-          # Replace deployment target placeholder
-          sed -i '' "s/{{DEPLOYMENT_TARGET}}/${{ matrix.deployment_target }}/g" "Solar System.app/Contents/Info.plist"
-          
-          # Replace icon name placeholder
-          if command -v iconutil >/dev/null 2>&1; then
-            ICON_NAME="Solar System"
-          else
-            ICON_NAME="Solar System.png"
-          fi
-          sed -i '' "s/{{ICON_NAME}}/$ICON_NAME/g" "Solar System.app/Contents/Info.plist"
-          
-          # Verify the bundle structure
-          echo "App bundle created:"
-          ls -la "Solar System.app/Contents/"
-          echo "Binary architecture:"
-          file "Solar System.app/Contents/MacOS/Solar System"
-          lipo -info "Solar System.app/Contents/MacOS/Solar System" || echo "Single architecture binary"
+          APP_NAME="Solar System"
+          BUNDLE_DIR="${APP_NAME}.app"
+          mkdir -p "${BUNDLE_DIR}/Contents/MacOS"
+          mkdir -p "${BUNDLE_DIR}/Contents/Resources"
 
-      - name: Create DMG Package
-        run: |
-          # Create a temporary directory for DMG contents
-          mkdir -p dmg-contents
-          cp -R "Solar System.app" dmg-contents/
-          
-          # Create a symbolic link to Applications folder
-          ln -s /Applications dmg-contents/Applications
-          
-          # Create the DMG
-          hdiutil create -volname "Solar System" \
-            -srcfolder dmg-contents \
-            -ov -format UDZO \
-            solar-system-macos-${{ matrix.dmg_suffix }}.dmg
-          
-          echo "DMG created successfully:"
-          ls -lh solar-system-macos-${{ matrix.dmg_suffix }}.dmg
-
-      - name: Test Application Bundle
-        run: |
-          # Basic test to ensure the app bundle was created properly
-          if [ -d "Solar System.app" ]; then
-            echo "App bundle created successfully"
-            echo "Bundle structure:"
-            find "Solar System.app" -type f | head -10
-            
-            echo "Binary info:"
-            file "Solar System.app/Contents/MacOS/Solar System"
-            
-            # Test if it's the correct architecture
-            if lipo -info "Solar System.app/Contents/MacOS/Solar System" 2>/dev/null | grep -q "${{ matrix.arch }}"; then
-              echo "${{ matrix.arch }} binary created successfully"
-            else
-              echo "Binary architecture not detected correctly"
-            fi
+          # Copy binary
+          if [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
+            cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
           else
-            echo "App bundle creation failed"
+            echo "::error::Binary not found"
             exit 1
           fi
+          chmod +x "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
 
-      - name: Upload ${{ matrix.dmg_suffix }} DMG to Release
+          # Copy assets
+          cp -rv resources/* "${BUNDLE_DIR}/Contents/Resources/"
+          cp -rv src/shaders "${BUNDLE_DIR}/Contents/Resources/"
+
+          # Icon
+          if command -v iconutil >/dev/null 2>&1; then
+            mkdir -p "icon.iconset"
+            cp packaging/solar-system.png "icon.iconset/icon_512x512.png"
+            iconutil -c icns "icon.iconset" -o "${BUNDLE_DIR}/Contents/Resources/AppIcon.icns"
+            rm -rf "icon.iconset"
+            ICON_FILE="AppIcon.icns"
+          else
+            cp packaging/solar-system.png "${BUNDLE_DIR}/Contents/Resources/AppIcon.png"
+            ICON_FILE="AppIcon.png"
+          fi
+
+          # Info.plist
+          CURRENT_YEAR=$(date +%Y)
+          cp packaging/Info.plist "${BUNDLE_DIR}/Contents/Info.plist"
+          sed -i '' "s/{{VERSION}}/${{ steps.strings.outputs.project-version }}/g" "${BUNDLE_DIR}/Contents/Info.plist"
+          sed -i '' "s/{{YEAR}}/${CURRENT_YEAR}/g" "${BUNDLE_DIR}/Contents/Info.plist"
+          sed -i '' "s/{{DEPLOYMENT_TARGET}}/${{ matrix.deployment_target }}/g" "${BUNDLE_DIR}/Contents/Info.plist"
+          sed -i '' "s/{{ICON_NAME}}/${ICON_FILE}/g" "${BUNDLE_DIR}/Contents/Info.plist"
+
+      - name: Create DMG
+        run: |
+          mkdir -p dmg-root
+          cp -R "Solar System.app" dmg-root/
+          ln -s /Applications dmg-root/Applications
+          hdiutil create -volname "Solar System" -srcfolder dmg-root -ov -format UDZO solar-system-macos-${{ matrix.dmg_suffix }}.dmg
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-system-macos-${{ matrix.dmg_suffix }}
+          path: solar-system-macos-${{ matrix.dmg_suffix }}.dmg
+
+      - name: Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:

@@ -29,6 +29,6 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2025 Joel Vaz. All rights reserved.</string>
+    <string>Copyright © {{YEAR}} Joel Vaz. All rights reserved.</string>
 </dict>
 </plist>

@@ -1,0 +1,72 @@
+name: Build on Linux
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.display_server }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        display_server: [wayland, x11]
+        include:
+          - display_server: wayland
+            apt_packages: libegl1-mesa-dev libfontconfig1-dev libwayland-dev libwayland-cursor0 libwayland-egl1-mesa libxkbcommon-dev
+            cmake_flags: -DGLFW_BUILD_WAYLAND=ON -DGLFW_BUILD_X11=OFF
+          - display_server: x11
+            apt_packages: libegl1-mesa-dev libfontconfig1-dev libxrandr-dev libx11-dev libxext-dev libxinerama-dev libxcursor-dev libxi-dev
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=ON
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build-${{ matrix.display_server }}
+          key: ${{ runner.os }}-${{ matrix.display_server }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.display_server }}-cmake-
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${{ github.workspace }}/build-${{ matrix.display_server }}" >> "$GITHUB_OUTPUT"
+          PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake
+        run: >
+          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_CXX_COMPILER=g++
+          -DCMAKE_C_COMPILER=gcc
+          -DCMAKE_BUILD_TYPE=Release
+          ${{ matrix.cmake_flags }}
+          -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-system-linux-${{ matrix.display_server }}
+          path: build-${{ matrix.display_server }}/bin/solar_system

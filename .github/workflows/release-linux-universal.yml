@@ -6,51 +6,47 @@ on:
   pull_request:
     branches: ["main"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   build-universal-appimage:
+    name: Build Universal AppImage
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          repository: "joelvaz0x01/solar-system-opengl"
           submodules: true
 
-      - name: Update repositories
-        run: sudo apt update
-
-      - name: Install common OpenGL dependencies
+      - name: Install dependencies
         run: |
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             libegl1-mesa-dev \
             libgl1-mesa-dev \
-            libfontconfig1-dev
-
-      - name: Install Wayland dependencies
-        run: |
-          sudo apt install -y \
+            libfontconfig1-dev \
             libwayland-dev \
             libwayland-cursor0 \
             libwayland-egl1-mesa \
             libxkbcommon-dev \
             libdecor-0-dev \
-            libdecor-0-0
-
-      - name: Install X11 dependencies
-        run: |
-          sudo apt install -y \
+            libdecor-0-0 \
             libx11-dev \
             libxrandr-dev \
             libxi-dev \
             libxinerama-dev \
-            libxcursor-dev
+            libxcursor-dev \
+            wget
 
       - name: Install AppImage tools
         run: |
-          wget -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy
 
       - name: Set reusable strings
@@ -61,7 +57,7 @@ jobs:
           PROJECT_VERSION=$(grep -E "^project\(solar_system VERSION" CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
           echo "project-version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake with both X11 and Wayland support
+      - name: Configure CMake
         run: |
           cmake -B ${{ steps.strings.outputs.build-output-dir }} \
             -DCMAKE_CXX_COMPILER=g++ \
@@ -75,135 +71,81 @@ jobs:
       - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config Release
 
-      - name: Prepare Universal AppDir structure
+      - name: Prepare AppDir
         run: |
-          # Create AppDir structure
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           mkdir -p AppDir/usr/share/solar-system
-          
+
           # Copy binary
-          if [ -f "bin/solar_system.out" ]; then
-            cp bin/solar_system.out AppDir/usr/bin/solar_system
-          elif [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out" ]; then
-            cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system.out AppDir/usr/bin/solar_system
+          if [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
+            cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system AppDir/usr/bin/solar_system
           else
-            echo "Binary not found"
+            echo "::error::Binary not found"
             exit 1
           fi
-          
           chmod +x AppDir/usr/bin/solar_system
-          
-          # Copy resources and shaders
-          cp -r resources/* AppDir/usr/share/solar-system/
-          cp -r src/shaders AppDir/usr/share/solar-system/
-          
-          # Copy desktop file from packaging
+
+          # Copy assets
+          cp -rv resources/* AppDir/usr/share/solar-system/
+          cp -rv src/shaders AppDir/usr/share/solar-system/
+
+          # Desktop entry and icon
           cp packaging/solar-system.desktop AppDir/usr/share/applications/solar-system.desktop
-          
-          # Copy app icon from packaging
           cp packaging/solar-system.png AppDir/usr/share/icons/hicolor/256x256/apps/solar-system.png
-          
-          # Create smart AppRun script that detects display server
+
+          # AppRun script for display server detection
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
           export PATH="${HERE}/usr/bin:${PATH}"
           export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
           export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS}"
-          
-          # Set resource path for the application to find its assets
           export SOLAR_SYSTEM_RESOURCE_PATH="${HERE}/usr/share/solar-system"
-          
-          # Improved display server detection
+
           WAYLAND_DETECTED=false
           X11_DETECTED=false
-          
-          # Check for Wayland
-          if [ -n "$WAYLAND_DISPLAY" ] || [ -n "$XDG_SESSION_TYPE" ] && [ "$XDG_SESSION_TYPE" = "wayland" ] || pgrep -x "gnome-shell" > /dev/null 2>&1 || pgrep -x "kwin_wayland" > /dev/null 2>&1; then
+
+          if [ -n "$WAYLAND_DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "wayland" ]; then
             WAYLAND_DETECTED=true
           fi
-          
-          # Check for X11
+
           if [ -n "$DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "x11" ]; then
             X11_DETECTED=true
           fi
-          
-          # Set environment based on detection
-          if [ "$WAYLAND_DETECTED" = true ] && [ "$X11_DETECTED" = false ]; then
-            echo "Detected pure Wayland session"
+
+          if [ "$WAYLAND_DETECTED" = true ]; then
+            echo "Targeting Wayland"
             export GDK_BACKEND=wayland
             export QT_QPA_PLATFORM=wayland
             export SDL_VIDEODRIVER=wayland
-            export CLUTTER_BACKEND=wayland
-            export XDG_SESSION_TYPE=wayland
-            # Disable GTK decorations to avoid libdecor issues
-            export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
-            export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
-            export _JAVA_AWT_WM_NONREPARENTING=1
-          elif [ "$X11_DETECTED" = true ] && [ "$WAYLAND_DETECTED" = false ]; then
-            echo "Detected pure X11 session"
-            export GDK_BACKEND=x11
-            export QT_QPA_PLATFORM=xcb
-            export SDL_VIDEODRIVER=x11
-            export XDG_SESSION_TYPE=x11
-          elif [ "$WAYLAND_DETECTED" = true ] && [ "$X11_DETECTED" = true ]; then
-            echo "Detected XWayland session (Wayland with X11 compatibility)"
-            # Prefer native Wayland when both are available
-            if [ -n "$WAYLAND_DISPLAY" ]; then
-              echo "Using native Wayland"
-              export GDK_BACKEND=wayland
-              export QT_QPA_PLATFORM=wayland
-              export SDL_VIDEODRIVER=wayland
-              export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
-              export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
-            else
-              echo "Falling back to X11"
-              export GDK_BACKEND=x11
-              export QT_QPA_PLATFORM=xcb
-              export SDL_VIDEODRIVER=x11
-            fi
           else
-            echo "No display server detected, trying X11 as fallback"
+            echo "Targeting X11"
             export GDK_BACKEND=x11
             export QT_QPA_PLATFORM=xcb
             export SDL_VIDEODRIVER=x11
-            export XDG_SESSION_TYPE=x11
           fi
-          
-          # Execute the application from its binary location
+
           exec "${HERE}/usr/bin/solar_system" "$@"
           EOF
           chmod +x AppDir/AppRun
-          
-          # Make desktop file executable and create symlinks for AppImage
-          chmod +x AppDir/usr/share/applications/solar-system.desktop
+
           ln -sf usr/share/applications/solar-system.desktop AppDir/solar-system.desktop
           ln -sf usr/share/icons/hicolor/256x256/apps/solar-system.png AppDir/solar-system.png
 
-      - name: Create Universal AppImage
+      - name: Create AppImage
         run: |
-          # Create AppImage
           ./linuxdeploy --appdir AppDir --output appimage
-          
-          # Rename the AppImage
-          mv Solar_System*.AppImage solar-system-linux-universal.AppImage || \
           mv *.AppImage solar-system-linux-universal.AppImage
 
-      - name: Test AppImage
-        run: |
-          # Basic test to ensure the AppImage was created properly
-          if [ -f "solar-system-linux-universal.AppImage" ]; then
-            echo "AppImage created successfully"
-            ls -lh solar-system-linux-universal.AppImage
-            file solar-system-linux-universal.AppImage
-          else
-            echo "AppImage creation failed"
-            exit 1
-          fi
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-system-appimage
+          path: solar-system-linux-universal.AppImage
 
-      - name: Upload Universal AppImage to Release
+      - name: Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
