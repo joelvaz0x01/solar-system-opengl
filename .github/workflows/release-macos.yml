@@ -25,7 +25,7 @@ jobs:
             deployment_target: "11.0"
             dmg_suffix: arm64
           - arch: x86_64
-            runner: macos-13
+            runner: macos-15-intel
             deployment_target: "10.15"
             dmg_suffix: intel
 
