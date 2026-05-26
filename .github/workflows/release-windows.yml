@@ -86,7 +86,15 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp build/bin/Release/solar_system.exe dist/solar_system.exe
+          # Copy binary from project root bin (standardized output)
+          if [ -f "bin/Release/solar_system.exe" ]; then
+            cp bin/Release/solar_system.exe dist/solar_system.exe
+          elif [ -f "build/bin/Release/solar_system.exe" ]; then
+            cp build/bin/Release/solar_system.exe dist/solar_system.exe
+          else
+            echo "::error::Binary not found in bin/Release/ or build/bin/Release/"
+            exit 1
+          fi
           cp -r resources dist/
           cp -r src/shaders dist/
           cd dist

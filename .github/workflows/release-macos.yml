@@ -68,11 +68,13 @@ jobs:
           mkdir -p "${BUNDLE_DIR}/Contents/MacOS"
           mkdir -p "${BUNDLE_DIR}/Contents/Resources"
 
-          # Copy binary
-          if [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
+          # Copy binary from project root bin (standardized output)
+          if [ -f "bin/solar_system" ]; then
+            cp bin/solar_system "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
+          elif [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
             cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
           else
-            echo "::error::Binary not found"
+            echo "::error::Binary not found in bin/ or build-macos/bin/"
             exit 1
           fi
           chmod +x "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"

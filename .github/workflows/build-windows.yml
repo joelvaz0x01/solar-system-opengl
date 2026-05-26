@@ -81,4 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solar-system-windows
-          path: build/bin/Release/solar_system.exe
+          path: |
+            bin/Release/solar_system.exe
+            build/bin/Release/solar_system.exe
+          if-no-files-found: error
