@@ -67,6 +67,11 @@ endif()
 
 add_executable(${EXE_NAME} ${MACOS_BUNDLE} ${WIN32_GUI} ${SRC_FILES})
 
+# hide console window on Windows GUI builds
+if(MSVC AND WIN32_GUI)
+  set_target_properties(${EXE_NAME} PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
+endif()
+
 if(MSVC)
   target_compile_options(${EXE_NAME} PRIVATE /W4 /permissive-)
 else()

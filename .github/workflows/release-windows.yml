@@ -47,22 +47,29 @@ jobs:
       - name: Prepare Windows Resources
         shell: pwsh
         run: |
-          # Create icon from PNG (simplified, copying as ico works if file is compatible or using magic)
-          # In a professional setup, we'd use a tool to convert, but for now we ensure the RC points to it
-          # We'll use the PNG as a base if we had a converter, but let's assume we copy the png to ico
-          # Or better, just copy the file if it exists.
-          # For now, let's just process the RC file text.
+          # Process RC file
           $rcContent = Get-Content packaging/windows.rc
           $rcContent = $rcContent -replace '{{VERSION}}', "${{ steps.strings.outputs.project-version }}"
           $rcContent = $rcContent -replace '{{VERSION_COMMA}}', "${{ steps.strings.outputs.project-version-comma }}"
           $rcContent = $rcContent -replace '{{YEAR}}', "${{ steps.strings.outputs.current-year }}"
-          $rcContent | Set-Content packaging/windows_processed.rc
 
-          # Use a placeholder icon if one doesn't exist to avoid build failure
-          if (-not (Test-Path "packaging/solar-system.ico")) {
-            Copy-Item "packaging/solar-system.png" "packaging/solar-system.ico"
+          # Attempt to convert PNG to ICO properly
+          try {
+            Add-Type -AssemblyName System.Drawing
+            $bmp = New-Object System.Drawing.Bitmap("packaging/solar-system.png")
+            $iconHandle = $bmp.GetHicon()
+            $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
+            $stream = [System.IO.File]::OpenWrite("packaging/solar-system.ico")
+            $icon.Save($stream)
+            $stream.Close()
+            $bmp.Dispose()
+            Write-Host "Successfully converted PNG to ICO"
+          } catch {
+            Write-Warning "Could not convert PNG to ICO. Commenting out icon resource."
+            $rcContent = $rcContent -replace 'IDI_ICON1 ICON', '// IDI_ICON1 ICON'
           }
 
+          $rcContent | Set-Content packaging/windows_processed.rc
       - name: Configure CMake
         run: >
           cmake -B ${{ steps.strings.outputs.build-output-dir }}

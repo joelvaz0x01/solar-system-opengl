@@ -78,11 +78,13 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           mkdir -p AppDir/usr/share/solar-system
 
-          # Copy binary
-          if [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
+          # Copy binary from project root bin (standardized output)
+          if [ -f "bin/solar_system" ]; then
+            cp bin/solar_system AppDir/usr/bin/solar_system
+          elif [ -f "${{ steps.strings.outputs.build-output-dir }}/bin/solar_system" ]; then
             cp ${{ steps.strings.outputs.build-output-dir }}/bin/solar_system AppDir/usr/bin/solar_system
           else
-            echo "::error::Binary not found"
+            echo "::error::Binary not found in bin/ or build-universal/bin/"
             exit 1
           fi
           chmod +x AppDir/usr/bin/solar_system
