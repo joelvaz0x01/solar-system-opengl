@@ -55,4 +55,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solar-system-macos-${{ matrix.arch }}
-          path: build-macos/bin/solar_system
+          path: bin/solar_system
+          if-no-files-found: error
