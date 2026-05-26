@@ -212,6 +212,7 @@ void renderSkybox(unsigned int skyboxCubeMap) {
       0.5f, -0.5f, 0.5f,
       0.5f, -0.5f, 0.5f,
       -0.5f, -0.5f, 0.5f,
+      -0.5f, -0.5f, -0.5f,
 
       /* right side */
       -0.5f, 0.5f, -0.5f,
